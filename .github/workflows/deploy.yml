@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy Ubiquiti LLM API to VPS
 
 on:
   push:
@@ -17,9 +17,9 @@ jobs:
       - name: Setup VPS and Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 190.7.234.37
-          username: root
-          password: YmUeXJYrO3
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
           port: 22
           command_timeout: 30m
           script: |
@@ -38,7 +38,7 @@ jobs:
             # Instalar Git si no existe
             if ! command -v git &> /dev/null; then
               echo "📦 Instalando Git..."
-              apt update && apt install -y git
+              apt update && apt install -y git curl
             else
               echo "✅ Git ya está instalado"
             fi
@@ -50,7 +50,7 @@ jobs:
             git --version
             
             # Configurar directorio del proyecto
-            PROJECT_DIR="/opt/splynx-tickets"
+            PROJECT_DIR="/opt/ubiquiti-llm"
             
             # Crear directorio si no existe
             mkdir -p $PROJECT_DIR
@@ -59,7 +59,7 @@ jobs:
             # Si el repo no existe, clonarlo
             if [ ! -d ".git" ]; then
               echo "📦 Clonando repositorio..."
-              git clone https://github.com/rhernandezbas/splynx-tickets.git .
+              git clone https://github.com/rhernandezbas/ubiquiti__lmm.git .
             else
               echo "🔄 Actualizando repositorio..."
               git fetch origin
@@ -67,13 +67,36 @@ jobs:
               git pull origin main
             fi
             
+            # Crear archivo .env si no existe
+            if [ ! -f ".env" ]; then
+              echo "📝 Creando archivo .env..."
+              cat > .env << 'EOF'
+            # UISP Configuration
+            UISP_BASE_URL=${{ secrets.UISP_BASE_URL }}
+            UISP_TOKEN=${{ secrets.UISP_TOKEN }}
+            
+            # SSH Configuration
+            UBIQUITI_SSH_USERNAME=${{ secrets.UBIQUITI_SSH_USERNAME }}
+            UBIQUITI_SSH_PASSWORD=${{ secrets.UBIQUITI_SSH_PASSWORD }}
+            
+            # OpenAI Configuration
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            LLM_MODEL=gpt-4o-mini
+            
+            # API Configuration
+            API_HOST=0.0.0.0
+            API_PORT=8000
+            LOG_LEVEL=INFO
+            EOF
+            fi
+            
             # Detener contenedores existentes
             echo "🛑 Deteniendo contenedores..."
-            docker compose down -v 2>/dev/null || true
+            docker compose down 2>/dev/null || true
             
-            # Limpiar caché de Docker completamente
-            echo "🧹 Limpiando caché de Docker..."
-            docker system prune -af
+            # Limpiar imágenes antiguas
+            echo "🧹 Limpiando imágenes antiguas..."
+            docker image prune -af
             
             # Construir y levantar con los nuevos cambios
             echo "🏗️  Construyendo nueva imagen..."
@@ -84,7 +107,7 @@ jobs:
             
             # Esperar a que el contenedor esté listo
             echo "⏳ Esperando que el servicio esté listo..."
-            sleep 15
+            sleep 20
             
             # Mostrar estado
             echo "📊 Estado de contenedores:"
@@ -99,12 +122,12 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 190.7.234.37
-          username: root
-          password: YmUeXJYrO3
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
           port: 22
           script: |
-            cd /opt/splynx-tickets
+            cd /opt/ubiquiti-llm
             
             # Verificar que los contenedores están corriendo
             if docker compose ps | grep -q "Up"; then
@@ -113,14 +136,15 @@ jobs:
               echo "📊 Estado de servicios:"
               docker compose ps
               echo ""
-              echo "🌐 Frontend disponible en: http://190.7.234.37:7842"
-              echo "🔌 Backend (interno): http://backend:7842"
+              echo "🌐 API disponible en: http://${{ secrets.VPS_HOST }}:8000"
+              echo "📖 Documentación: http://${{ secrets.VPS_HOST }}:8000/docs"
+              echo "🏥 Health check: http://${{ secrets.VPS_HOST }}:8000/health"
               echo ""
-              echo "📋 Logs del frontend:"
-              docker compose logs --tail=10 frontend
+              echo "📋 Logs de la API:"
+              docker compose logs --tail=20 api
               echo ""
-              echo "📋 Logs del backend:"
-              docker compose logs --tail=10 backend
+              echo "🔍 Verificando health endpoint..."
+              curl -f http://localhost:8000/health || echo "⚠️  Health check falló"
               exit 0
             else
               echo "❌ Error: Contenedores no están corriendo"
