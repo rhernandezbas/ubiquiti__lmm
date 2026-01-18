@@ -1,4 +1,4 @@
-# UISP Diagnostic Service
+s# UISP Diagnostic Service
 
 Servicio de diagnóstico inteligente para dispositivos Ubiquiti UISP utilizando LLM (Large Language Models).
 
