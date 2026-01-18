@@ -84,7 +84,7 @@ jobs:
               echo "" >> .env
               echo "# API Configuration" >> .env
               echo "API_HOST=0.0.0.0" >> .env
-              echo "API_PORT=8000" >> .env
+              echo "API_PORT=7444" >> .env
               echo "LOG_LEVEL=INFO" >> .env
             fi
             
@@ -134,15 +134,15 @@ jobs:
               echo "📊 Estado de servicios:"
               docker compose ps
               echo ""
-              echo "🌐 API disponible en: http://${{ secrets.VPS_HOST }}:8000"
-              echo "📖 Documentación: http://${{ secrets.VPS_HOST }}:8000/docs"
-              echo "🏥 Health check: http://${{ secrets.VPS_HOST }}:8000/health"
+              echo "🌐 API disponible en: http://190.7.234.37:7444"
+              echo "📖 Documentación: http://190.7.234.37:7444/docs"
+              echo "🏥 Health check: http://190.7.234.37:7444/health"
               echo ""
               echo "📋 Logs de la API:"
               docker compose logs --tail=20 api
               echo ""
               echo "🔍 Verificando health endpoint..."
-              curl -f http://localhost:8000/health || echo "⚠️  Health check falló"
+              curl -f http://localhost:7444/health || echo "⚠️  Health check falló"
               exit 0
             else
               echo "❌ Error: Contenedores no están corriendo"
