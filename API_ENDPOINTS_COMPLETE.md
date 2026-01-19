@@ -121,7 +121,7 @@ curl "http://190.7.234.37:7444/api/v1/ap-clients-only?ip_address=100.64.12.173"
 
 ## 📚 Remote AP Clients
 
-### List All APs
+### ListsAll APs
 ```bash
 GET /list-all-aps
 ```
