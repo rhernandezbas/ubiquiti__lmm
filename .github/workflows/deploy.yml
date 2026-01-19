@@ -82,9 +82,7 @@ jobs:
               echo "OPENAI_API_KEY=$(echo 'c2stcHJvai1TTHlIZGZuY1kwUW45Zk9lQ203UTlId0lkSkNJZFNEc3Z4RXVKMTBPWnVaREJfTzhjek1SeGx4b2loYklRU2NUTG12Z01fNWtIcFQzQmxia0ZKaWx3R0ZZNXJXM1VXOWNwYlZ6a2dYTEVyQ0JRWTdKRkk2UmFuUDNDWXVMblZqTFJTTU5IUm9BQms3WG1FdTlyb2pWMGhEN3VUWUE=' | base64 -d)" >> .env
               echo "LLM_MODEL=gpt-4o-mini" >> .env
               echo "" >> .env
-              echo "# API Configuration" >> .env
-              echo "API_HOST=0.0.0.0" >> .env
-              echo "API_PORT=7444" >> .env
+              echo "# Logging Configuration" >> .env
               echo "LOG_LEVEL=INFO" >> .env
             fi
             
