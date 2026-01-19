@@ -5,6 +5,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Poetry

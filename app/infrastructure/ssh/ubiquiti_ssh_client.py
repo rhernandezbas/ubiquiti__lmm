@@ -49,7 +49,8 @@ class UbiquitiSSHClient:
             logger.info(f"Conexión SSH establecida con {host}")
             return conn
         except Exception as e:
-            logger.error(f"Error conectando vía SSH a {host}: {str(e)}")
+            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__}"
+            logger.error(f"Error conectando vía SSH a {host}: {error_msg}")
             raise
     
     async def execute_command(self, conn: asyncssh.SSHClientConnection, command: str) -> Dict[str, Any]:
@@ -74,10 +75,11 @@ class UbiquitiSSHClient:
                 "success": result.exit_status == 0
             }
         except Exception as e:
-            logger.error(f"Error ejecutando comando SSH: {str(e)}")
+            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__}"
+            logger.error(f"Error ejecutando comando SSH: {error_msg}")
             return {
                 "stdout": "",
-                "stderr": str(e),
+                "stderr": error_msg,
                 "exit_status": -1,
                 "success": False
             }
