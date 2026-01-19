@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any, List
 from app.infrastructure.api.uisp_client import UISPClient
 from app.config.settings import settings
+from app.interfaces.api.v1.endpoints.device_analysis_complete import get_device_metrics
 import logging
 
 logger = logging.getLogger(__name__)
@@ -68,8 +69,14 @@ async def find_device_data(
         if exact_matches:
             device_data = exact_matches[0]
             identification = device_data.get("identification", {})
-            overview = device_data.get("overview", {})
-            overview_keys = list(overview.keys()) if overview else []
+            
+            # Obtener interfaces para get_device_metrics
+            uisp_client = await get_uisp_client()
+            device_id = identification.get("id")
+            interfaces = await uisp_client.get_device_interfaces(device_id) if device_id else []
+            
+            # Usar get_device_metrics en lugar de overview directo
+            device_metrics = await get_device_metrics(uisp_client, device_data, interfaces)
             
             return {
                 "found": True,
@@ -80,8 +87,8 @@ async def find_device_data(
                 "model": identification.get("model"),
                 "mac_address": identification.get("mac"),
                 "status": device_data.get("status"),
-                "overview_keys": overview_keys,
-                "overview_full": overview,
+                "overview_keys": list(device_metrics.keys()) if device_metrics else [],
+                "overview_full": device_metrics,
                 "identification": identification
             }
         
