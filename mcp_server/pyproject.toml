@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "ubiquiti-llm-mcp-server"
+version = "1.0.0"
+description = "MCP Server for Ubiquiti LLM Diagnostic Service"
+authors = ["rhernandezbas <ronald.hernandezbastidas@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+mcp = "^1.1.2"
+httpx = "^0.26.0"
+pydantic = "^2.5.3"
+
+[tool.poetry.scripts]
+ubiquiti-llm-mcp = "server:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
