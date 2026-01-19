@@ -40,10 +40,10 @@ def get_frequencies_for_model(model: str, default_band: str = "5GHz") -> List[in
     
     # M5/AC Equipment - Frecuencias 5 GHz
     if "M5" in model_upper or "AC" in model_upper:
-        return DEVICE_FREQUENCIES["default_5ghz"]
+        return DEVICE_FREQUENCIES["AC"]
     
     # Default - 5 GHz para todo lo demás
-    return DEVICE_FREQUENCIES["default_5ghz"]
+    return DEVICE_FREQUENCIES["AC"]
 
 def get_frequency_range_string(frequencies: List[int]) -> str:
     """
