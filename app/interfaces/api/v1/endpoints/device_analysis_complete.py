@@ -122,32 +122,37 @@ async def perform_site_survey_and_filter(
                 # Es nuestro AP, agregar información adicional
                 ap["ap_name"] = our_ap_macs[bssid]["name"]
                 
-                # Obtener cantidad de clientes conectados del AP vía SSH
+                # Obtener cantidad de clientes conectados del AP
                 ap_device = our_ap_macs[bssid]["device_data"]
-                ap_ip = ap_device.get("ipAddress")
+                overview = ap_device.get("overview", {})
                 
-                # Intentar obtener el número real de clientes vía SSH
-                if ap_ip:
-                    try:
-                        client_count = await ssh_client.get_connected_clients_count(ap_ip)
-                        logger.info(f"AP {our_ap_macs[bssid]['name']} (IP: {ap_ip}): {client_count} clientes conectados vía SSH")
-                    except Exception as e:
-                        logger.warning(f"No se pudo obtener clientes del AP {ap_ip} vía SSH: {e}")
-                        # Fallback a datos de UISP
-                        overview = ap_device.get("overview", {})
-                        client_count = (
-                            overview.get("stationsCount") or
-                            overview.get("linkStationsCount") or
-                            0
-                        )
-                else:
-                    # Sin IP, usar datos de UISP
-                    overview = ap_device.get("overview", {})
-                    client_count = (
-                        overview.get("stationsCount") or
-                        overview.get("linkStationsCount") or
-                        0
-                    )
+                # Primero intentar obtener de UISP
+                client_count = (
+                    overview.get("stationsCount") or
+                    overview.get("linkStationsCount") or
+                    overview.get("linkActiveStationsCount") or
+                    overview.get("connectedStations") or
+                    overview.get("wirelessClientsCount") or
+                    overview.get("activeClientsCount") or
+                    len(overview.get("stations", []))
+                )
+                
+                # Si UISP no tiene datos (0 o None), intentar vía SSH
+                if not client_count:
+                    ap_ip_raw = ap_device.get("ipAddress")
+                    if ap_ip_raw:
+                        # Limpiar IP (remover máscara /24, /32, etc.)
+                        ap_ip = ap_ip_raw.split('/')[0] if '/' in ap_ip_raw else ap_ip_raw
+                        try:
+                            client_count = await ssh_client.get_connected_clients_count(ap_ip)
+                            logger.info(f"AP {our_ap_macs[bssid]['name']} (IP: {ap_ip}): {client_count} clientes vía SSH")
+                        except Exception as e:
+                            logger.debug(f"No se pudo obtener clientes del AP {ap_ip} vía SSH: {e}")
+                            client_count = 0
+                
+                # Si aún es None, usar 0
+                if client_count is None:
+                    client_count = 0
                 
                 ap["clients_connected"] = client_count
                 our_aps.append(ap)
