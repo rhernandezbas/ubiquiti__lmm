@@ -298,7 +298,8 @@ async def generate_llm_analysis(
     metrics: Dict[str, Any],
     frequency_check: Dict[str, Any],
     survey_result: Dict[str, Any],
-    ping_result: Dict[str, Any]
+    ping_result: Dict[str, Any],
+    current_ap_info: Dict[str, Any] = None
 ) -> str:
     """
     Paso 4: Generar análisis LLM con formato natural
@@ -386,32 +387,92 @@ async def generate_llm_analysis(
         best_signal = best_ap.get("signal_dbm")
         best_ssid = best_ap.get("ssid")
         best_clients = best_ap.get("clients_connected", 0)
+        best_bssid = best_ap.get("bssid", "").upper().replace(":", "")
         signal_diff = best_signal - signal if signal else 0
+        
+        # Verificar si ya estamos conectados al mejor AP
+        # Usar BSSID para comparación precisa si está disponible
+        current_ap_bssid = current_ap_info.get("bssid", "").upper().replace(":", "") if current_ap_info and current_ap_info.get("success") else None
+        current_ap_ssid = current_ap_info.get("ssid") if current_ap_info and current_ap_info.get("success") else None
+        
+        is_connected_to_best = False
+        connection_status = ""
+        
+        if best_ap and current_ap_bssid:
+            # Comparación por BSSID (la más precisa)
+            best_ap_bssid = best_ap.get("bssid", "").upper().replace(":", "")
+            if best_ap_bssid == current_ap_bssid:
+                is_connected_to_best = True
+                connection_status = f"\n🎯 **YA ESTÁS CONECTADO AL MEJOR AP**\n- AP actual: {best_ssid} ({best_signal} dBm, {best_clients} clientes)\n- Este es el mejor AP disponible para tu ubicación"
+            else:
+                # No estamos conectados al mejor AP, pero verificamos si es similar
+                signal_diff = best_signal - (current_ap_info.get("signal", signal) if current_ap_info and current_ap_info.get("success") else signal)
+                
+                if abs(signal_diff) <= 3 and best_clients <= current_ap_clients + 2:
+                    # El mejor AP es solo ligeramente mejor
+                    connection_status = f"\n✅ **AP ACTUAL ADECUADO**\n- AP actual: {current_ap_ssid or 'Desconocido'} ({current_ap_info.get('signal', signal) if current_ap_info and current_ap_info.get('success') else signal} dBm)\n- Mejor AP disponible: {best_ssid} ({best_signal} dBm, {best_clients} clientes)\n- Diferencia mínima ({signal_diff:+d} dBm) - Tu AP actual es aceptable"
+                else:
+                    # Hay una mejora significativa disponible
+                    pass  # Usar la lógica normal de recomendación
+        elif best_ap and current_ap_ssid:
+            # Comparación por SSID si no tenemos BSSID
+            if best_ssid == current_ap_ssid and abs(signal_diff) <= 3:
+                is_connected_to_best = True
+                connection_status = f"\n🎯 **YA ESTÁS CONECTADO AL MEJOR AP**\n- AP actual: {best_ssid} ({best_signal} dBm, {best_clients} clientes)\n- Este es el mejor AP disponible para tu ubicación"
         
         # Determinar si recomendar cambio
         recommend_change = False
         reason = ""
         
-        if signal_diff >= 5 and best_clients < current_ap_clients:
-            recommend_change = True
-            reason = f"Señal {signal_diff:+d} dBm mejor y MENOS clientes ({best_clients} vs {current_ap_clients})"
-        elif signal_diff >= 10:
-            recommend_change = True
-            reason = f"Señal {signal_diff:+d} dBm mejor"
-        elif signal_diff >= 5 and best_clients <= current_ap_clients + 3:
-            recommend_change = True
-            reason = f"Señal {signal_diff:+d} dBm mejor y carga similar ({best_clients} vs {current_ap_clients} clientes)"
-        
-        if recommend_change:
-            ap_info = f"\n🔄 CAMBIO DE AP RECOMENDADO:\n- Cambiar a: {best_ssid}\n- Razón: {reason}\n- Señal: {best_signal} dBm @ {best_ap.get('frequency_mhz')} MHz"
+        if is_connected_to_best or connection_status:
+            # Ya estamos en el mejor AP o el AP actual es adecuado
+            recommend_change = False
+            ap_info = connection_status
             
-            if second_best:
+            # Agregar información sobre alternativas si existen y estamos en el mejor
+            if is_connected_to_best and second_best:
                 second_signal = second_best.get("signal_dbm")
                 second_ssid = second_best.get("ssid")
                 second_clients = second_best.get("clients_connected", 0)
-                ap_info += f"\n- Alternativa: {second_ssid} ({second_signal} dBm, {second_clients} clientes)"
+                signal_diff_second = second_signal - best_signal
+                ap_info += f"\n\n📊 **ALTERNATIVAS DISPONIBLES:**\n- Segundo mejor: {second_ssid} ({second_signal} dBm, {second_clients} clientes)"
+                ap_info += f"\n- Diferencia: {signal_diff_second:+d} dBm respecto a tu AP actual"
+                
+                if abs(signal_diff_second) <= 3:
+                    ap_info += f"\n- ✅ Alternativa similar, pero tu AP actual sigue siendo la mejor opción"
+                else:
+                    ap_info += f"\n- ⚠️ Alternativa significativamente peor"
+                    
         else:
-            ap_info = f"\n✅ AP ACTUAL ÓPTIMO:\n- Mejor AP disponible: {best_ssid} ({best_signal} dBm, {best_clients} clientes)\n- Diferencia: {signal_diff:+d} dBm\n- No se recomienda cambio (carga o señal no justifican el cambio)"
+            # No estamos en el mejor AP y hay una mejora significativa disponible
+            # Usar la señal actual del dispositivo si tenemos esa información
+            current_signal = current_ap_info.get("signal", signal) if current_ap_info and current_ap_info.get("success") else signal
+            
+            # Recalcular diferencia de señal con la información actual
+            signal_diff = best_signal - current_signal
+            
+            # Lógica original para recomendar cambio
+            if signal_diff >= 5 and best_clients < current_ap_clients:
+                recommend_change = True
+                reason = f"Señal {signal_diff:+d} dBm mejor y MENOS clientes ({best_clients} vs {current_ap_clients})"
+            elif signal_diff >= 10:
+                recommend_change = True
+                reason = f"Señal {signal_diff:+d} dBm mejor"
+            elif signal_diff >= 5 and best_clients <= current_ap_clients + 3:
+                recommend_change = True
+                reason = f"Señal {signal_diff:+d} dBm mejor y carga similar ({best_clients} vs {current_ap_clients} clientes)"
+            
+            if recommend_change:
+                ap_info = f"\n🔄 **CAMBIO DE AP RECOMENDADO:**\n- Cambiar a: {best_ssid}\n- Razón: {reason}\n- Señal: {best_signal} dBm @ {best_ap.get('frequency_mhz')} MHz"
+                ap_info += f"\n- AP actual: {current_ap_ssid or 'Desconocido'} ({current_signal} dBm)"
+                
+                if second_best:
+                    second_signal = second_best.get("signal_dbm")
+                    second_ssid = second_best.get("ssid")
+                    second_clients = second_best.get("clients_connected", 0)
+                    ap_info += f"\n- Alternativa: {second_ssid} ({second_signal} dBm, {second_clients} clientes)"
+            else:
+                ap_info = f"\n✅ **AP ACTUAL ÓPTIMO:**\n- Mejor AP disponible: {best_ssid} ({best_signal} dBm, {best_clients} clientes)\n- AP actual: {current_ap_ssid or 'Desconocido'} ({current_signal} dBm)\n- Diferencia: {signal_diff:+d} dBm\n- No se recomienda cambio (carga o señal no justifican el cambio)"
     
     problems_text = "\n".join(problems) if problems else "✅ Sin problemas detectados"
 
@@ -562,6 +623,14 @@ async def analyze_device_complete(
         logger.info(f"🏓 Paso 0: Ping al dispositivo")
         ping_result = await ping_device(ip_address, count=5)
         
+        # PASO 0.5: Obtener información del AP actual
+        logger.info(f"📡 Paso 0.5: Obteniendo información del AP actual")
+        current_ap_info = await ssh_client.get_current_ap_info(
+            host=ip_address,
+            username=ssh_user,
+            password=ssh_pass
+        )
+        
         # PASO 1: Verificar/habilitar frecuencias
         frequency_check = await verify_and_enable_frequencies(
             ssh_client=ssh_client,
@@ -598,7 +667,8 @@ async def analyze_device_complete(
             metrics=metrics,
             frequency_check=frequency_check,
             survey_result=survey_result,
-            ping_result=ping_result
+            ping_result=ping_result,
+            current_ap_info=current_ap_info
         )
         
         # Construir respuesta completa
@@ -614,6 +684,7 @@ async def analyze_device_complete(
                 "ping": ping_result,
                 "metrics": metrics,
                 "frequency_check": frequency_check,
+                "current_ap_info": current_ap_info,
                 "site_survey": {
                     "success": survey_result.get("success"),
                     "aps_found": survey_result.get("aps_found", 0),
