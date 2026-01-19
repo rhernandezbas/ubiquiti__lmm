@@ -476,6 +476,12 @@ async def generate_llm_analysis(
     
     problems_text = "\n".join(problems) if problems else "✅ Sin problemas detectados"
 
+    # Extraer información del AP actual
+    current_ap_ssid = current_ap_info.get("ssid", "Desconocido") if current_ap_info and current_ap_info.get("success") else "Desconocido"
+    current_ap_bssid = current_ap_info.get("bssid", "") if current_ap_info and current_ap_info.get("success") else ""
+    current_ap_signal = current_ap_info.get("signal", signal) if current_ap_info and current_ap_info.get("success") else signal
+    current_ap_clients_real = current_ap_info.get("clients_count", current_ap_clients) if current_ap_info and current_ap_info.get("success") else current_ap_clients
+
     prompt = f"""
     Actúa como operador NOC de primer nivel de un ISP.
 
@@ -494,20 +500,31 @@ async def generate_llm_analysis(
     LAN:
     - Ethernet: {ethernet}
 
-    WIRELESS / AP:
-    - Señal: {signal} dBm
+    WIRELESS / AP ACTUAL:
+    - SSID: {current_ap_ssid}
+    - BSSID: {current_ap_bssid}
+    - Señal actual: {current_ap_signal} dBm
     - Frecuencia: {frequency} MHz
     - Capacidad: {downlink}/{uplink} Mbps
-    - Clientes conectados: {current_ap_clients}
+    - Clientes conectados al AP: {current_ap_clients_real}
     - Link Score: {link_score}
 
     TRÁFICO:
     - RX/TX: {rx_gb}/{tx_gb} GB
 
+    SITE SURVEY - MEJORES APS ENCONTRADOS:
+    - Mejor AP: {best_ap.get('ssid', 'N/A')} ({best_signal} dBm, {best_clients} clientes)
+    - Segundo mejor: {second_best.get('ssid', 'N/A')} ({second_best.get('signal_dbm', 'N/A')} dBm, {second_best.get('clients_connected', 0)} clientes) if second_best else 'No disponible'
+
+    ANÁLISIS DE CONEXIÓN:
+    - ¿Estás conectado al mejor AP? {'SÍ' if is_connected_to_best else 'NO'}
+    - Diferencia de señal vs mejor AP: {signal_diff:+d} dBm
+    - Diferencia de clientes vs mejor AP: {current_ap_clients_real - best_clients:+d} clientes
+
     PROBLEMAS DETECTADOS:
     {problems_text}
 
-    INFO ADICIONAL:
+    RECOMENDACIÓN DE AP:
     {ap_info}
 
     FORMATO DE RESPUESTA (OBLIGATORIO):
@@ -524,24 +541,26 @@ async def generate_llm_analysis(
     - Velocidad: {ethernet}
     - ¿Es un problema? (Sí / No)
 
-    4️⃣ WIRELESS / AP:
-    - Señal: {signal} dBm → Buena / Regular / Mala
-    - Capacidad: {downlink}/{uplink} Mbps vs {current_ap_clients} clientes → Suficiente / Justa / Saturada
+    4️⃣ WIRELESS / AP ACTUAL:
+    - Conectado a: {current_ap_ssid} ({current_ap_signal} dBm)
+    - Señal: {current_ap_signal} dBm → Buena / Regular / Mala
+    - Capacidad: {downlink}/{uplink} Mbps vs {current_ap_clients_real} clientes → Suficiente / Justa / Saturada
     - AP actual adecuado: Sí / No
 
     5️⃣ APS ALTERNATIVOS:
-    {ap_info}
-    - Si hay mejor AP: menciona SSID, mejora de señal, y comparación de clientes
-    - Recomienda cambio solo si mejora señal Y tiene menos/similar clientes
+    - Mejor AP disponible: {best_ap.get('ssid', 'N/A')} ({best_signal} dBm, {best_clients} clientes)
+    - Comparación: {'Estás en el mejor AP' if is_connected_to_best else f'Mejor AP tiene {signal_diff:+d} dBm y {best_clients - current_ap_clients_real:+d} clientes'}
+    - Si hay mejor AP: menciona si vale la pena cambiar
+    - Si no hay mejor AP: confirma que el actual es óptimo
 
     6️⃣ RECOMENDACIÓN NOC (CLARA Y DIRECTA):
+    - Mantener AP actual (óptimo) - ya estás conectado al mejor AP
     - Cambiar a AP [nombre] (mejor señal y menos clientes)
-    - Mantener AP actual (óptimo)
-    - Revisar cable LAN (velocidad limitada)
+    - Mantener AP actual (diferencia mínima)
     - Escalar a técnico de campo
     - Solo monitorear
 
-    Sé específico con nombres de APs y razones claras.
+    Usa los nombres reales de los APs y razones específicas basadas en señal y clientes.
     """
 
     try:
