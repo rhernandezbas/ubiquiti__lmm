@@ -1,133 +1,52 @@
 """
 Diccionario de frecuencias disponibles por modelo de dispositivo Ubiquiti.
-Estas frecuencias están en MHz y representan todos los canales que cada modelo puede escanear/usar.
+Simplificado para distinguir solo entre M5/AC (5 GHz) y M2.
 """
 
 from typing import Dict, List
 
-# Frecuencias por modelo de dispositivo
+# Frecuencias simplificadas por tipo de dispositivo
 DEVICE_FREQUENCIES: Dict[str, List[int]] = {
-    # LiteBeam AC - Banda completa 5 GHz (4.9 - 6.1 GHz)
-    "LiteBeam AC": list(range(4920, 6105, 5)),  # 4920 a 6100 MHz en pasos de 5 MHz
-    "LBE-5AC-Gen2": list(range(4920, 6105, 5)),
-    "LBE-5AC-16-120": list(range(4920, 6105, 5)),
-    "LBE-5AC-23": list(range(4920, 6105, 5)),
-    
-    # NanoBeam AC - Banda completa 5 GHz (4.9 - 6.1 GHz)
-    "NanoBeam AC": list(range(4920, 6105, 5)),  # 4920 a 6100 MHz en pasos de 5 MHz
-    "NBE-5AC-Gen2": list(range(4920, 6105, 5)),
-    "NBE-5AC-16": list(range(4920, 6105, 5)),
-    "NBE-5AC-19": list(range(4920, 6105, 5)),
-    
-    # PowerBeam AC - Banda 5 GHz completa
-    "PowerBeam AC": list(range(5150, 5876, 5)),
-    "PBE-5AC-Gen2": list(range(5150, 5876, 5)),
-    "PBE-5AC-300": list(range(5150, 5876, 5)),
-    "PBE-5AC-400": list(range(5150, 5876, 5)),
-    "PBE-5AC-500": list(range(5150, 5876, 5)),
-    "PBE-5AC-620": list(range(5150, 5876, 5)),
-    
-    # airMAX AC - Banda 5 GHz
-    "Rocket 5AC": list(range(5150, 5876, 5)),
-    "R5AC-Lite": list(range(5150, 5876, 5)),
-    "R5AC-PTP": list(range(5150, 5876, 5)),
-    "R5AC-PTMP": list(range(5150, 5876, 5)),
-    
-    # NanoStation AC - Dual band
-    "NanoStation AC": {
-        "2.4GHz": list(range(2412, 2485, 5)),  # 2.412 - 2.484 GHz
-        "5GHz": list(range(5150, 5876, 5))
-    },
-    "NS-5AC": list(range(5150, 5876, 5)),
-    "NS-5ACL": list(range(5150, 5876, 5)),
-    
-    # LiteAP AC - Banda 5 GHz
-    "LiteAP AC": list(range(5150, 5876, 5)),
-    "LAP-120": list(range(5150, 5876, 5)),
-    "LAP-GPS": list(range(5150, 5876, 5)),
-    
-    # airFiber - Bandas específicas según modelo
-    "airFiber 5": list(range(5150, 5876, 5)),
-    "airFiber 5X": list(range(5150, 5876, 5)),
-    "airFiber 5XHD": list(range(5150, 5876, 5)),
-    "AF-5": list(range(5150, 5876, 5)),
-    "AF-5X": list(range(5150, 5876, 5)),
-    "AF-5XHD": list(range(5150, 5876, 5)),
-    
-    # airFiber 60/24 - Bandas milimétricas (solo referencia, no wireless típico)
-    "airFiber 60": [60000],  # 60 GHz (simplificado)
-    "airFiber 24": [24000],  # 24 GHz (simplificado)
-    
-    # Modelos legacy airMAX M (2.4 GHz y 5 GHz)
-    "NanoStation M2": list(range(2412, 2485, 5)),
-    "NanoStation M5": list(range(5150, 5876, 20)),  # Canales más espaciados en M5
-    "Rocket M2": list(range(2412, 2485, 5)),
-    "Rocket M5": list(range(5150, 5876, 20)),
-    "PowerBeam M5": list(range(5150, 5876, 20)),
-    "NanoBridge M5": list(range(5150, 5876, 20)),
-    
     # M2 Equipment - Frecuencias específicas para equipos M2 (2.3-2.7 GHz)
     "M2": [2312, 2317, 2322, 2327, 2332, 2337, 2342, 2347, 2352, 2357, 2362, 2367, 2372, 2377, 2382, 2387, 2392, 2397, 2402, 2407, 2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2477, 2482, 2487, 2492, 2497, 2502, 2507, 2512, 2517, 2522, 2527, 2532, 2537, 2542, 2547, 2552, 2557, 2562, 2567, 2572, 2577, 2582, 2587, 2592, 2597, 2602, 2607, 2612, 2617, 2622, 2627, 2632, 2637, 2642, 2647, 2652, 2657, 2662, 2667, 2672, 2677, 2682, 2687, 2692, 2697, 2702, 2707, 2712, 2717, 2722, 2727, 2732],
     
-    # Default genérico para dispositivos 5 GHz no identificados
-    "default_5ghz": list(range(5150, 5876, 5)),
+    # M5/AC Equipment - Frecuencias 5 GHz (4.920 - 6.100 MHz)
+    "M5": [4920, 4925, 4930, 4935, 4940, 4945, 4950, 4955, 4960, 4965, 4970, 4975, 4980, 4985, 4990, 4995, 5000, 5005, 5010, 5015, 5020, 5025, 5030, 5035, 5040, 5045, 5050, 5055, 5060, 5065, 5070, 5075, 5080, 5085, 5090, 5095, 5100, 5105, 5110, 5115, 5120, 5125, 5130, 5135, 5140, 5145, 5150, 5155, 5160, 5165, 5170, 5175, 5180, 5185, 5190, 5195, 5200, 5205, 5210, 5215, 5220, 5225, 5230, 5235, 5240, 5245, 5250, 5255, 5260, 5265, 5270, 5275, 5280, 5285, 5290, 5295, 5300, 5305, 5310, 5315, 5320, 5325, 5330, 5335, 5340, 5345, 5350, 5355, 5360, 5365, 5370, 5375, 5380, 5385, 5390, 5395, 5400, 5405, 5410, 5415, 5420, 5425, 5430, 5435, 5440, 5445, 5450, 5455, 5460, 5465, 5470, 5475, 5480, 5485, 5490, 5495, 5500, 5505, 5510, 5515, 5520, 5525, 5530, 5535, 5540, 5545, 5550, 5555, 5560, 5565, 5570, 5575, 5580, 5585, 5590, 5595, 5600, 5605, 5610, 5615, 5620, 5625, 5630, 5635, 5640, 5645, 5650, 5655, 5660, 5665, 5670, 5675, 5680, 5685, 5690, 5695, 5700, 5705, 5710, 5715, 5720, 5725, 5730, 5735, 5740, 5745, 5750, 5755, 5760, 5765, 5770, 5775, 5780, 5785, 5790, 5795, 5800, 5805, 5810, 5815, 5820, 5825, 5830, 5835, 5840, 5845, 5850, 5855, 5860, 5865, 5870, 5875, 5880, 5885, 5890, 5895, 5900, 5905, 5910, 5915, 5920, 5925, 5930, 5935, 5940, 5945, 5950, 5955, 5960, 5965, 5970, 5975, 5980, 5985, 5990, 5995, 6000, 6005, 6010, 6015, 6020, 6025, 6030, 6035, 6040, 6045, 6050, 6055, 6060, 6065, 6070, 6075, 6080, 6085, 6090, 6095, 6100],
+    "AC": [4920, 4925, 4930, 4935, 4940, 4945, 4950, 4955, 4960, 4965, 4970, 4975, 4980, 4985, 4990, 4995, 5000, 5005, 5010, 5015, 5020, 5025, 5030, 5035, 5040, 5045, 5050, 5055, 5060, 5065, 5070, 5075, 5080, 5085, 5090, 5095, 5100, 5105, 5110, 5115, 5120, 5125, 5130, 5135, 5140, 5145, 5150, 5155, 5160, 5165, 5170, 5175, 5180, 5185, 5190, 5195, 5200, 5205, 5210, 5215, 5220, 5225, 5230, 5235, 5240, 5245, 5250, 5255, 5260, 5265, 5270, 5275, 5280, 5285, 5290, 5295, 5300, 5305, 5310, 5315, 5320, 5325, 5330, 5335, 5340, 5345, 5350, 5355, 5360, 5365, 5370, 5375, 5380, 5385, 5390, 5395, 5400, 5405, 5410, 5415, 5420, 5425, 5430, 5435, 5440, 5445, 5450, 5455, 5460, 5465, 5470, 5475, 5480, 5485, 5490, 5495, 5500, 5505, 5510, 5515, 5520, 5525, 5530, 5535, 5540, 5545, 5550, 5555, 5560, 5565, 5570, 5575, 5580, 5585, 5590, 5595, 5600, 5605, 5610, 5615, 5620, 5625, 5630, 5635, 5640, 5645, 5650, 5655, 5660, 5665, 5670, 5675, 5680, 5685, 5690, 5695, 5700, 5705, 5710, 5715, 5720, 5725, 5730, 5735, 5740, 5745, 5750, 5755, 5760, 5765, 5770, 5775, 5780, 5785, 5790, 5795, 5800, 5805, 5810, 5815, 5820, 5825, 5830, 5835, 5840, 5845, 5850, 5855, 5860, 5865, 5870, 5875, 5880, 5885, 5890, 5895, 5900, 5905, 5910, 5915, 5920, 5925, 5930, 5935, 5940, 5945, 5950, 5955, 5960, 5965, 5970, 5975, 5980, 5985, 5990, 5995, 6000, 6005, 6010, 6015, 6020, 6025, 6030, 6035, 6040, 6045, 6050, 6055, 6060, 6065, 6070, 6075, 6080, 6085, 6090, 6095, 6100],
+    
+    # Defaults
+    "default_5ghz": [4920, 4925, 4930, 4935, 4940, 4945, 4950, 4955, 4960, 4965, 4970, 4975, 4980, 4985, 4990, 4995, 5000, 5005, 5010, 5015, 5020, 5025, 5030, 5035, 5040, 5045, 5050, 5055, 5060, 5065, 5070, 5075, 5080, 5085, 5090, 5095, 5100, 5105, 5110, 5115, 5120, 5125, 5130, 5135, 5140, 5145, 5150, 5155, 5160, 5165, 5170, 5175, 5180, 5185, 5190, 5195, 5200, 5205, 5210, 5215, 5220, 5225, 5230, 5235, 5240, 5245, 5250, 5255, 5260, 5265, 5270, 5275, 5280, 5285, 5290, 5295, 5300, 5305, 5310, 5315, 5320, 5325, 5330, 5335, 5340, 5345, 5350, 5355, 5360, 5365, 5370, 5375, 5380, 5385, 5390, 5395, 5400, 5405, 5410, 5415, 5420, 5425, 5430, 5435, 5440, 5445, 5450, 5455, 5460, 5465, 5470, 5475, 5480, 5485, 5490, 5495, 5500, 5505, 5510, 5515, 5520, 5525, 5530, 5535, 5540, 5545, 5550, 5555, 5560, 5565, 5570, 5575, 5580, 5585, 5590, 5595, 5600, 5605, 5610, 5615, 5620, 5625, 5630, 5635, 5640, 5645, 5650, 5655, 5660, 5665, 5670, 5675, 5680, 5685, 5690, 5695, 5700, 5705, 5710, 5715, 5720, 5725, 5730, 5735, 5740, 5745, 5750, 5755, 5760, 5765, 5770, 5775, 5780, 5785, 5790, 5795, 5800, 5805, 5810, 5815, 5820, 5825, 5830, 5835, 5840, 5845, 5850, 5855, 5860, 5865, 5870, 5875, 5880, 5885, 5890, 5895, 5900, 5905, 5910, 5915, 5920, 5925, 5930, 5935, 5940, 5945, 5950, 5955, 5960, 5965, 5970, 5975, 5980, 5985, 5990, 5995, 6000, 6005, 6010, 6015, 6020, 6025, 6030, 6035, 6040, 6045, 6050, 6055, 6060, 6065, 6070, 6075, 6080, 6085, 6090, 6095, 6100],
     "default_2.4ghz": list(range(2412, 2485, 5)),
-}
-
-# Bandas de frecuencia por región (regulatorio)
-REGULATORY_BANDS: Dict[str, Dict[str, List[int]]] = {
-    "FCC": {  # Estados Unidos
-        "2.4GHz": list(range(2412, 2485, 5)),
-        "5GHz_UNII1": list(range(5150, 5251, 5)),  # 5.15 - 5.25 GHz
-        "5GHz_UNII2": list(range(5250, 5351, 5)),  # 5.25 - 5.35 GHz
-        "5GHz_UNII2e": list(range(5470, 5726, 5)),  # 5.47 - 5.725 GHz
-        "5GHz_UNII3": list(range(5725, 5851, 5)),  # 5.725 - 5.85 GHz
-    },
-    "ETSI": {  # Europa
-        "2.4GHz": list(range(2412, 2485, 5)),
-        "5GHz": list(range(5150, 5876, 5)),
-    },
-    "LATAM": {  # Latinoamérica (similar a FCC)
-        "2.4GHz": list(range(2412, 2485, 5)),
-        "5GHz": list(range(5150, 5876, 5)),
-    }
 }
 
 def get_frequencies_for_model(model: str, default_band: str = "5GHz") -> List[int]:
     """
     Obtiene las frecuencias disponibles para un modelo específico.
     
+    Lógica simplificada:
+    - Si el modelo contiene "M2" → frecuencias M2
+    - Si contiene "M5" o "AC" → frecuencias 5 GHz
+    - Default → 5 GHz
+    
     Args:
         model: Nombre del modelo del dispositivo
-        default_band: Banda por defecto si el modelo no se encuentra ("5GHz" o "2.4GHz")
+        default_band: Banda por defecto (no usado en la lógica simplificada)
     
     Returns:
         Lista de frecuencias en MHz
     """
-    # Exact match for M2 equipment first
-    if model == "M2":
+    model_upper = model.upper()
+    
+    # M2 Equipment - Prioridad alta
+    if model_upper == "M2" or " M2 " in model_upper or model_upper.endswith(" M2"):
         return DEVICE_FREQUENCIES["M2"]
     
-    # Buscar coincidencia exacta
-    if model in DEVICE_FREQUENCIES:
-        freq = DEVICE_FREQUENCIES[model]
-        # Si es un dict (dual band), retornar la banda especificada
-        if isinstance(freq, dict):
-            return freq.get(default_band, freq.get("5GHz", []))
-        return freq
-    
-    # Buscar coincidencia parcial (por si el modelo tiene sufijos/versiones)
-    for key, freq in DEVICE_FREQUENCIES.items():
-        if key != "M2" and (key.lower() in model.lower() or model.lower() in key.lower()):
-            if isinstance(freq, dict):
-                return freq.get(default_band, freq.get("5GHz", []))
-            return freq
-    
-    # Default según banda
-    if "2.4" in model or "M2" in model:
-        return DEVICE_FREQUENCIES["default_2.4ghz"]
-    else:
+    # M5/AC Equipment - Frecuencias 5 GHz
+    if "M5" in model_upper or "AC" in model_upper:
         return DEVICE_FREQUENCIES["default_5ghz"]
+    
+    # Default - 5 GHz para todo lo demás
+    return DEVICE_FREQUENCIES["default_5ghz"]
 
 def get_frequency_range_string(frequencies: List[int]) -> str:
     """
