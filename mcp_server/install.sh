@@ -16,7 +16,7 @@ echo "✅ Python encontrado: $(python3 --version)"
 
 # Instalar dependencias
 echo "📦 Instalando dependencias..."
-pip install mcp httpx pydantic
+pip install mcp httpx pydantic fastapi uvicorn[standard]
 
 echo ""
 echo "✅ Instalación completada!"
