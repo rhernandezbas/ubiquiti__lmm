@@ -20,6 +20,57 @@ async def get_uisp_client() -> UISPClient:
     )
 
 
+@router.get("/search-devices")
+async def search_devices(
+    query: str = Query(..., description="Buscar por IP, nombre o MAC")
+) -> List[Dict[str, Any]]:
+    """
+    Busca dispositivos en UISP por IP, nombre o MAC
+    
+    Args:
+        query: Término de búsqueda (IP, nombre o MAC parcial)
+        
+    Returns:
+        Lista de dispositivos que coinciden con la búsqueda
+    """
+    try:
+        # Inicializar cliente UISP
+        uisp_client = await get_uisp_client()
+        
+        # Obtener todos los dispositivos
+        devices = await uisp_client.get_devices()
+        
+        # Buscar coincidencias
+        results = []
+        query_lower = query.lower()
+        
+        for device in devices:
+            identification = device.get("identification", {})
+            ip_address = device.get("ipAddress", "")
+            name = identification.get("name", "")
+            mac = identification.get("mac", "")
+            
+            # Buscar en IP, nombre o MAC
+            if (query_lower in ip_address.lower() or 
+                query_lower in name.lower() or 
+                query_lower in mac.lower()):
+                
+                results.append({
+                    "device_id": identification.get("id"),
+                    "name": name,
+                    "ip_address": ip_address,
+                    "mac_address": mac,
+                    "model": identification.get("model"),
+                    "status": device.get("status")
+                })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error buscando dispositivos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error buscando dispositivos: {str(e)}")
+
+
 @router.get("/debug-device-overview")
 async def get_device_overview(
     ip_address: str = Query(..., description="IP del dispositivo a consultar")
