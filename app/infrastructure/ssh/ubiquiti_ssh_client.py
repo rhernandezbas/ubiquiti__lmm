@@ -269,7 +269,7 @@ class UbiquitiSSHClient:
                 conn.close()
                 await conn.wait_closed()
 
-    async def get_current_ap_info(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
+    async def get_current_ap_info(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None, uisp_client=None) -> Dict[str, Any]:
         """
         Obtiene información del AP actual al que está conectado el dispositivo
         
@@ -278,6 +278,7 @@ class UbiquitiSSHClient:
             interface: Interfaz wireless (default: ath0)
             username: Usuario SSH
             password: Contraseña SSH
+            uisp_client: Cliente UISP para obtener clientes del AP (opcional)
             
         Returns:
             Información del AP actual (SSID, BSSID, señal, clientes, etc.)
@@ -338,25 +339,61 @@ class UbiquitiSSHClient:
                     except:
                         pass
             
-            # Obtener cantidad de clientes conectados al AP
-            try:
-                # Intentar obtener lista de estaciones
-                clients_result = await self.execute_command(conn, f"iwpriv {interface} get_sta_list")
-                if clients_result["success"] and clients_result["stdout"]:
-                    # Contar líneas que no son encabezados
-                    client_lines = [line for line in clients_result["stdout"].strip().split('\n') 
-                                  if line.strip() and not line.startswith("Station") and not line.startswith("--")]
-                    ap_info["clients_count"] = len(client_lines)
-                else:
-                    # Alternativa: intentar otro comando
-                    alt_result = await self.execute_command(conn, f"iwconfig {interface} station list")
-                    if alt_result["success"] and alt_result["stdout"]:
-                        client_lines = [line for line in alt_result["stdout"].strip().split('\n') 
+            # Obtener cantidad de clientes conectados al AP desde UISP
+            if uisp_client and ap_info.get("bssid"):
+                try:
+                    # Obtener todos los APs de UISP
+                    uisp_aps = await uisp_client.get_all_aps()
+                    
+                    # Buscar el AP por BSSID
+                    ap_bssid = ap_info["bssid"]
+                    for ap in uisp_aps:
+                        ap_mac = ap.get("identification", {}).get("mac", "").upper().replace(":", "")
+                        if ap_mac == ap_bssid:
+                            # Obtener cantidad de clientes desde UISP
+                            overview = ap.get("overview", {})
+                            client_count = (
+                                overview.get("stationsCount") or
+                                overview.get("linkStationsCount") or
+                                overview.get("linkActiveStationsCount") or
+                                overview.get("connectedStations") or
+                                overview.get("wirelessClientsCount") or
+                                overview.get("activeClientsCount") or
+                                len(overview.get("stations", []))
+                            )
+                            
+                            if client_count:
+                                ap_info["clients_count"] = client_count
+                                logger.info(f"AP {ap_info.get('ssid')}: {client_count} clientes desde UISP")
+                                break
+                    
+                    # Si no se encontró en UISP, marcar como no disponible
+                    if ap_info["clients_count"] == 0:
+                        logger.warning(f"AP con BSSID {ap_bssid} no encontrado en UISP o sin datos de clientes")
+                        
+                except Exception as e:
+                    logger.error(f"Error obteniendo clientes desde UISP: {e}")
+                    ap_info["clients_count"] = 0
+            else:
+                # Fallback: intentar obtener clientes locales (si es AP)
+                try:
+                    # Intentar obtener lista de estaciones
+                    clients_result = await self.execute_command(conn, f"iwpriv {interface} get_sta_list")
+                    if clients_result["success"] and clients_result["stdout"]:
+                        # Contar líneas que no son encabezados
+                        client_lines = [line for line in clients_result["stdout"].strip().split('\n') 
                                       if line.strip() and not line.startswith("Station") and not line.startswith("--")]
                         ap_info["clients_count"] = len(client_lines)
-            except:
-                # Si falla, dejar en 0
-                ap_info["clients_count"] = 0
+                    else:
+                        # Alternativa: intentar otro comando
+                        alt_result = await self.execute_command(conn, f"iwconfig {interface} station list")
+                        if alt_result["success"] and alt_result["stdout"]:
+                            client_lines = [line for line in alt_result["stdout"].strip().split('\n') 
+                                          if line.strip() and not line.startswith("Station") and not line.startswith("--")]
+                            ap_info["clients_count"] = len(client_lines)
+                except:
+                    # Si falla, dejar en 0
+                    ap_info["clients_count"] = 0
             
             return ap_info
             

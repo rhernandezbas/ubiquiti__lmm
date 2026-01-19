@@ -628,7 +628,8 @@ async def analyze_device_complete(
         current_ap_info = await ssh_client.get_current_ap_info(
             host=ip_address,
             username=ssh_user,
-            password=ssh_pass
+            password=ssh_pass,
+            uisp_client=uisp_client
         )
         
         # PASO 1: Verificar/habilitar frecuencias
