@@ -37,8 +37,8 @@ async def list_all_aps() -> Dict[str, Any]:
         # Filtrar solo APs
         ap_devices = []
         for device in devices:
-            device_type = device.get("identification", {}).get("type", "")
-            if device_type.lower() == "ap":
+            device_type = device.get("identification", {}).get("type")
+            if device_type and device_type.lower() == "ap":
                 ap_devices.append({
                     "device_id": device.get("identification", {}).get("id"),
                     "name": device.get("identification", {}).get("name"),
