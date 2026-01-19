@@ -1,6 +1,6 @@
 # API Endpoints - Ubiquiti LLM System
 
-## Base URL
+## Base URLl
 ```
 http://localhost:8000/api/v1
 ```
