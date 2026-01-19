@@ -642,8 +642,8 @@ async def analyze_device_complete(
         
         # Si se configuraron frecuencias, esperar a que el softrestart aplique los cambios
         if frequency_check.get("action") == "configured":
-            logger.info(f"⏳ Esperando 15 segundos para que el dispositivo aplique las nuevas frecuencias...")
-            await asyncio.sleep(15)
+            logger.info(f"⏳ Esperando 25 segundos para que el dispositivo aplique las nuevas frecuencias...")
+            await asyncio.sleep(25)
             logger.info(f"✅ Continuando con site survey")
         
         # PASO 2: Site survey y filtrar APs
