@@ -122,24 +122,32 @@ async def perform_site_survey_and_filter(
                 # Es nuestro AP, agregar información adicional
                 ap["ap_name"] = our_ap_macs[bssid]["name"]
                 
-                # Obtener cantidad de clientes conectados
+                # Obtener cantidad de clientes conectados del AP vía SSH
                 ap_device = our_ap_macs[bssid]["device_data"]
-                overview = ap_device.get("overview", {})
+                ap_ip = ap_device.get("ipAddress")
                 
-                # Intentar múltiples campos para obtener el número de clientes
-                client_count = (
-                    overview.get("stationsCount") or
-                    overview.get("linkStationsCount") or
-                    overview.get("linkActiveStationsCount") or
-                    overview.get("connectedStations") or
-                    overview.get("wirelessClientsCount") or
-                    overview.get("activeClientsCount") or
-                    len(overview.get("stations", [])) or
-                    0
-                )
-                
-                # Log para debug
-                logger.debug(f"AP {ap_name} (BSSID: {bssid}): {client_count} clientes - overview keys: {list(overview.keys())}")
+                # Intentar obtener el número real de clientes vía SSH
+                if ap_ip:
+                    try:
+                        client_count = await ssh_client.get_connected_clients_count(ap_ip)
+                        logger.info(f"AP {our_ap_macs[bssid]['name']} (IP: {ap_ip}): {client_count} clientes conectados vía SSH")
+                    except Exception as e:
+                        logger.warning(f"No se pudo obtener clientes del AP {ap_ip} vía SSH: {e}")
+                        # Fallback a datos de UISP
+                        overview = ap_device.get("overview", {})
+                        client_count = (
+                            overview.get("stationsCount") or
+                            overview.get("linkStationsCount") or
+                            0
+                        )
+                else:
+                    # Sin IP, usar datos de UISP
+                    overview = ap_device.get("overview", {})
+                    client_count = (
+                        overview.get("stationsCount") or
+                        overview.get("linkStationsCount") or
+                        0
+                    )
                 
                 ap["clients_connected"] = client_count
                 our_aps.append(ap)
