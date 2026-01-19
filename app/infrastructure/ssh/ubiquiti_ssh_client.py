@@ -189,6 +189,88 @@ class UbiquitiSSHClient:
                 conn.close()
                 await conn.wait_closed()
     
+    async def get_current_ap_info(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Obtiene información del AP actual al que está conectado el dispositivo
+        
+        Args:
+            host: IP del dispositivo
+            interface: Interfaz wireless (default: ath0)
+            username: Usuario SSH
+            password: Contraseña SSH
+            
+        Returns:
+            Información del AP actual (SSID, BSSID, señal, etc.)
+        """
+        conn = None
+        try:
+            conn = await self.connect(host, username, password)
+            
+            # Obtener información wireless actual
+            result = await self.execute_command(conn, f"iwconfig {interface}")
+            
+            if not result["success"]:
+                return {
+                    "success": False,
+                    "error": result.get("stderr"),
+                    "message": "No se pudo obtener información wireless"
+                }
+            
+            output = result["stdout"]
+            ap_info = {
+                "success": True,
+                "ssid": None,
+                "bssid": None,
+                "signal": None,
+                "frequency": None,
+                "raw_output": output
+            }
+            
+            # Parsear salida de iwconfig para extraer información del AP
+            for line in output.split("\n"):
+                line = line.strip()
+                
+                # SSID (ESSID)
+                if "ESSID:" in line:
+                    essid_part = line.split("ESSID:")[1].strip()
+                    ap_info["ssid"] = essid_part.strip('"') if essid_part else None
+                
+                # BSSID (Access Point)
+                if "Access Point:" in line:
+                    bssid_part = line.split("Access Point:")[1].strip()
+                    ap_info["bssid"] = bssid_part.upper().replace(":", "") if bssid_part else None
+                
+                # Señal (Signal level)
+                if "Signal level=" in line:
+                    signal_part = line.split("Signal level=")[1].split()[0]
+                    try:
+                        ap_info["signal"] = int(signal_part.replace("dBm", "").strip())
+                    except:
+                        pass
+                
+                # Frecuencia
+                if "Frequency:" in line:
+                    freq_part = line.split("Frequency:")[1].split()[0]
+                    try:
+                        freq_ghz = float(freq_part)
+                        ap_info["frequency"] = int(freq_ghz * 1000)  # Convertir a MHz
+                    except:
+                        pass
+            
+            return ap_info
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo información del AP actual: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "No se pudo obtener información del AP actual"
+            }
+        finally:
+            if conn:
+                conn.close()
+                await conn.wait_closed()
+    
     async def get_wireless_info(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
         """
         Obtiene información wireless actual del dispositivo usando iwconfig
