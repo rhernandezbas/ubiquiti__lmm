@@ -280,7 +280,7 @@ class UbiquitiSSHClient:
             password: Contraseña SSH
             
         Returns:
-            Información del AP actual (SSID, BSSID, señal, etc.)
+            Información del AP actual (SSID, BSSID, señal, clientes, etc.)
         """
         conn = None
         try:
@@ -303,6 +303,7 @@ class UbiquitiSSHClient:
                 "bssid": None,
                 "signal": None,
                 "frequency": None,
+                "clients_count": 0,
                 "raw_output": output
             }
             
@@ -336,6 +337,26 @@ class UbiquitiSSHClient:
                         ap_info["frequency"] = int(freq_ghz * 1000)  # Convertir a MHz
                     except:
                         pass
+            
+            # Obtener cantidad de clientes conectados al AP
+            try:
+                # Intentar obtener lista de estaciones
+                clients_result = await self.execute_command(conn, f"iwpriv {interface} get_sta_list")
+                if clients_result["success"] and clients_result["stdout"]:
+                    # Contar líneas que no son encabezados
+                    client_lines = [line for line in clients_result["stdout"].strip().split('\n') 
+                                  if line.strip() and not line.startswith("Station") and not line.startswith("--")]
+                    ap_info["clients_count"] = len(client_lines)
+                else:
+                    # Alternativa: intentar otro comando
+                    alt_result = await self.execute_command(conn, f"iwconfig {interface} station list")
+                    if alt_result["success"] and alt_result["stdout"]:
+                        client_lines = [line for line in alt_result["stdout"].strip().split('\n') 
+                                      if line.strip() and not line.startswith("Station") and not line.startswith("--")]
+                        ap_info["clients_count"] = len(client_lines)
+            except:
+                # Si falla, dejar en 0
+                ap_info["clients_count"] = 0
             
             return ap_info
             
