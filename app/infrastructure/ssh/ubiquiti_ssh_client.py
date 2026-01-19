@@ -983,6 +983,44 @@ fi
                 conn.close()
                 await conn.wait_closed()
     
+    async def get_connected_clients_count(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> int:
+        """
+        Obtiene el número de clientes conectados a un AP vía SSH.
+        
+        Args:
+            host: IP del AP
+            interface: Interfaz wireless (default: ath0)
+            username: Usuario SSH
+            password: Contraseña SSH
+            
+        Returns:
+            Número de clientes conectados
+        """
+        conn = None
+        try:
+            conn = await self.connect(host, username, password)
+            
+            # Usar wlanconfig para listar estaciones conectadas
+            result = await self.execute_command(conn, f"wlanconfig {interface} list sta")
+            
+            if not result["success"] or not result["stdout"]:
+                return 0
+            
+            # Contar líneas (cada línea es un cliente, excepto el header)
+            lines = result["stdout"].strip().split("\n")
+            # Restar 1 por el header
+            client_count = max(0, len(lines) - 1)
+            
+            return client_count
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo clientes conectados de {host}: {str(e)}")
+            return 0
+        finally:
+            if conn:
+                conn.close()
+                await conn.wait_closed()
+    
     async def reboot_device(self, host: str, username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
         """
         Reinicia el dispositivo
