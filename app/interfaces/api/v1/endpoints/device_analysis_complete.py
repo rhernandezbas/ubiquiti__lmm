@@ -16,6 +16,7 @@ from app.config.settings import settings
 from app.infrastructure.ssh import UbiquitiSSHClient
 from app.infrastructure.api.uisp_client import UISPClient
 from app.utils.network_utils import ping_device
+from app.interfaces.api.v1.endpoints.device_validation import validate_device_type_and_mode, should_apply_current_logic
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -635,7 +636,52 @@ async def analyze_device_complete(
         
         logger.info(f"✅ Dispositivo encontrado: {device_name} ({device_model})")
         
-        # Obtener interfaces
+        # VALIDACIÓN: Verificar tipo y modo del dispositivo
+        logger.info(f"🔍 Validando tipo y modo del dispositivo")
+        validation_result = await validate_device_type_and_mode(
+            ssh_client=ssh_client,
+            device_ip=ip_address,
+            device_model=device_model,
+            ssh_username=ssh_user,
+            ssh_password=ssh_pass
+        )
+        
+        if not validation_result.get("success"):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No se pudo validar el dispositivo: {validation_result.get('error', 'Error desconocido')}"
+            )
+        
+        # Verificar si aplica la lógica actual (solo para M5/AC + Station)
+        if not should_apply_current_logic(validation_result):
+            device_type = validation_result.get("device_type")
+            is_station = validation_result.get("is_station")
+            is_ap = validation_result.get("is_ap")
+            recommendation = validation_result.get("recommendation")
+            
+            logger.warning(f"⚠️ Dispositivo {device_model} no aplica lógica actual: {device_type}, Station: {is_station}, AP: {is_ap}")
+            
+            return {
+                "success": True,
+                "device": {
+                    "name": device_name,
+                    "model": device_model,
+                    "ip": ip_address
+                },
+                "validation": validation_result,
+                "analysis": {
+                    "llm_summary": f"Dispositivo {device_model} detectado.\n\nTipo: {device_type}\nModo: {'Station' if is_station else 'AP' if is_ap else 'Desconocido'}\n\n{recommendation}\n\nEste dispositivo requiere una lógica de análisis diferente a la implementada actualmente.",
+                    "device_type": device_type,
+                    "is_station": is_station,
+                    "is_ap": is_ap,
+                    "recommendation": recommendation,
+                    "supports_current_logic": False
+                }
+            }
+        
+        logger.info(f"✅ Dispositivo {device_model} validado: {validation_result.get('recommendation')}")
+        
+        # Continuar con la lógica actual (solo para M5/AC + Station)
         interfaces = await uisp_client.get_device_interfaces(device_id)
         
         # PASO 0: Ping al dispositivo
