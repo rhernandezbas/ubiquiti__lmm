@@ -337,7 +337,12 @@ async def generate_llm_analysis(
     uplink_score = metrics["link_quality"]["uplink_score"]
     downlink_score = metrics["link_quality"]["downlink_score"]
     
-    current_ap_clients = metrics["current_ap"]["clients"]
+    # Obtener el número real de clientes del AP actual desde el site survey
+    # El AP actual es el best_ap del survey (el de mejor señal al que está conectado)
+    current_ap_clients = 0
+    best_ap = survey_result.get("best_ap")
+    if best_ap:
+        current_ap_clients = best_ap.get("clients_connected", 0)
     
     # Información de frecuencias
     freq_info = ""
