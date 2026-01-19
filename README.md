@@ -98,7 +98,7 @@ python main.py
 
 El servidor estará disponible en: `http://localhost:8000`
 
-## 📚 API Endpoints
+## 📚 API Endpointss
 
 ### Health Check
 ```
