@@ -66,6 +66,9 @@ DEVICE_FREQUENCIES: Dict[str, List[int]] = {
     "PowerBeam M5": list(range(5150, 5876, 20)),
     "NanoBridge M5": list(range(5150, 5876, 20)),
     
+    # M2 Equipment - Frecuencias específicas para equipos M2 (2.3-2.7 GHz)
+    "M2": [2312, 2317, 2322, 2327, 2332, 2337, 2342, 2347, 2352, 2357, 2362, 2367, 2372, 2377, 2382, 2387, 2392, 2397, 2402, 2407, 2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2477, 2482, 2487, 2492, 2497, 2502, 2507, 2512, 2517, 2522, 2527, 2532, 2537, 2542, 2547, 2552, 2557, 2562, 2567, 2572, 2577, 2582, 2587, 2592, 2597, 2602, 2607, 2612, 2617, 2622, 2627, 2632, 2637, 2642, 2647, 2652, 2657, 2662, 2667, 2672, 2677, 2682, 2687, 2692, 2697, 2702, 2707, 2712, 2717, 2722, 2727, 2732],
+    
     # Default genérico para dispositivos 5 GHz no identificados
     "default_5ghz": list(range(5150, 5876, 5)),
     "default_2.4ghz": list(range(2412, 2485, 5)),
@@ -101,6 +104,10 @@ def get_frequencies_for_model(model: str, default_band: str = "5GHz") -> List[in
     Returns:
         Lista de frecuencias en MHz
     """
+    # Exact match for M2 equipment first
+    if model == "M2":
+        return DEVICE_FREQUENCIES["M2"]
+    
     # Buscar coincidencia exacta
     if model in DEVICE_FREQUENCIES:
         freq = DEVICE_FREQUENCIES[model]
@@ -111,7 +118,7 @@ def get_frequencies_for_model(model: str, default_band: str = "5GHz") -> List[in
     
     # Buscar coincidencia parcial (por si el modelo tiene sufijos/versiones)
     for key, freq in DEVICE_FREQUENCIES.items():
-        if key.lower() in model.lower() or model.lower() in key.lower():
+        if key != "M2" and (key.lower() in model.lower() or model.lower() in key.lower()):
             if isinstance(freq, dict):
                 return freq.get(default_band, freq.get("5GHz", []))
             return freq
@@ -160,3 +167,7 @@ def get_standard_5ghz_frequencies() -> List[int]:
 def get_all_2_4ghz_frequencies() -> List[int]:
     """Retorna todas las frecuencias de 2.4 GHz (2.412 - 2.484 GHz)"""
     return list(range(2412, 2485, 5))
+
+def get_m2_frequencies() -> List[int]:
+    """Retorna todas las frecuencias específicas para equipos M2 (2.312 - 2.732 GHz)"""
+    return [2312, 2317, 2322, 2327, 2332, 2337, 2342, 2347, 2352, 2357, 2362, 2367, 2372, 2377, 2382, 2387, 2392, 2397, 2402, 2407, 2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2477, 2482, 2487, 2492, 2497, 2502, 2507, 2512, 2517, 2522, 2527, 2532, 2537, 2542, 2547, 2552, 2557, 2562, 2567, 2572, 2577, 2582, 2587, 2592, 2597, 2602, 2607, 2612, 2617, 2622, 2627, 2632, 2637, 2642, 2647, 2652, 2657, 2662, 2667, 2672, 2677, 2682, 2687, 2692, 2697, 2702, 2707, 2712, 2717, 2722, 2727, 2732]
