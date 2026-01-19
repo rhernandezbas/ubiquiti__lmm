@@ -126,13 +126,20 @@ async def perform_site_survey_and_filter(
                 ap_device = our_ap_macs[bssid]["device_data"]
                 overview = ap_device.get("overview", {})
                 
+                # Intentar múltiples campos para obtener el número de clientes
                 client_count = (
                     overview.get("stationsCount") or
                     overview.get("linkStationsCount") or
                     overview.get("linkActiveStationsCount") or
                     overview.get("connectedStations") or
+                    overview.get("wirelessClientsCount") or
+                    overview.get("activeClientsCount") or
+                    len(overview.get("stations", [])) or
                     0
                 )
+                
+                # Log para debug
+                logger.debug(f"AP {ap_name} (BSSID: {bssid}): {client_count} clientes - overview keys: {list(overview.keys())}")
                 
                 ap["clients_connected"] = client_count
                 our_aps.append(ap)
