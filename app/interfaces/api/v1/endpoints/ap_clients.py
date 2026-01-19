@@ -3,7 +3,7 @@ Endpoint para obtener información completa del AP y sus clientes
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.infrastructure.ssh.ubiquiti_ssh_client import UbiquitiSSHClient
 from app.config.settings import settings
 import logging
