@@ -1,6 +1,6 @@
 s# UISP Diagnostic Service
 
-Servicio de diagnóstico inteligente para dispositivos Ubiquiti UISP utilizando LLM (Large Language Models).
+Servic1io de diagnóstico inteligente para dispositivos Ubiquiti UISP utilizando LLM (Large Language Models).
 
 ## 🏗️ Arquitectura
 
