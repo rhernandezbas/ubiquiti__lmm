@@ -47,9 +47,9 @@ async def find_device_data(
         
         for device in devices:
             identification = device.get("identification", {})
-            ip_address = device.get("ipAddress", "")
-            name = identification.get("name", "")
-            mac = identification.get("mac", "")
+            ip_address = device.get("ipAddress", "") or ""
+            name = identification.get("name", "") or ""
+            mac = identification.get("mac", "") or ""
             
             # Coincidencia exacta
             if (query_lower == ip_address.lower() or 
@@ -144,9 +144,9 @@ async def search_devices(
         
         for device in devices:
             identification = device.get("identification", {})
-            ip_address = device.get("ipAddress", "")
-            name = identification.get("name", "")
-            mac = identification.get("mac", "")
+            ip_address = device.get("ipAddress", "") or ""
+            name = identification.get("name", "") or ""
+            mac = identification.get("mac", "") or ""
             
             # Buscar en IP, nombre o MAC
             if (query_lower in ip_address.lower() or 
