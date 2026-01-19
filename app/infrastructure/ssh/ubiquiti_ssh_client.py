@@ -189,6 +189,86 @@ class UbiquitiSSHClient:
                 conn.close()
                 await conn.wait_closed()
     
+    async def get_ap_clients(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Obtiene los clientes conectados al AP actual
+        
+        Args:
+            host: IP del dispositivo
+            interface: Interfaz wireless (default: ath0)
+            username: Usuario SSH
+            password: Contraseña SSH
+            
+        Returns:
+            Información de clientes conectados al AP
+        """
+        conn = None
+        try:
+            conn = await self.connect(host, username, password)
+            
+            # Obtener tabla de asociaciones (clientes conectados)
+            result = await self.execute_command(conn, f"iwpriv {interface} get_sta_list")
+            
+            if not result["success"]:
+                # Alternativa: usar iwconfig station list
+                result = await self.execute_command(conn, f"iwconfig {interface} station list")
+            
+            output = result["stdout"]
+            clients_info = {
+                "success": True,
+                "clients_count": 0,
+                "clients": [],
+                "raw_output": output
+            }
+            
+            # Parsear salida para extraer clientes
+            if output and output.strip():
+                lines = output.strip().split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith("Station") and not line.startswith("--"):
+                        # Formato típico: MAC  Signal  Rate  (varía por dispositivo)
+                        parts = line.split()
+                        if len(parts) >= 1:
+                            mac = parts[0].upper().replace(":", "")
+                            client_data = {"mac": mac}
+                            
+                            # Intentar extraer señal si está disponible
+                            if len(parts) >= 2:
+                                try:
+                                    signal = int(parts[1])
+                                    client_data["signal"] = signal
+                                except:
+                                    pass
+                            
+                            # Intentar extraer rate si está disponible
+                            if len(parts) >= 3:
+                                try:
+                                    rate = parts[2]
+                                    client_data["rate"] = rate
+                                except:
+                                    pass
+                            
+                            clients_info["clients"].append(client_data)
+            
+            clients_info["clients_count"] = len(clients_info["clients"])
+            
+            return clients_info
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo clientes del AP: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "No se pudo obtener clientes del AP",
+                "clients_count": 0,
+                "clients": []
+            }
+        finally:
+            if conn:
+                conn.close()
+                await conn.wait_closed()
+
     async def get_current_ap_info(self, host: str, interface: str = "ath0", username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
         """
         Obtiene información del AP actual al que está conectado el dispositivo
