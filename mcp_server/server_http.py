@@ -169,6 +169,36 @@ TOOLS = [
             },
             "required": ["ip_address"]
         }
+    },
+    {
+        "name": "get_logs",
+        "description": (
+            "Obtiene los logs de la aplicación Ubiquiti LLM. "
+            "Permite consultar logs generales (app) o logs de errores (error). "
+            "Útil para debugging y monitoreo del sistema."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "log_type": {
+                    "type": "string",
+                    "enum": ["app", "error"],
+                    "description": "Tipo de log: 'app' para logs generales, 'error' para logs de errores",
+                    "default": "app"
+                },
+                "lines": {
+                    "type": "integer",
+                    "description": "Número de líneas a retornar (últimas N líneas)",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 10000
+                },
+                "search": {
+                    "type": "string",
+                    "description": "Texto opcional para filtrar logs (case-insensitive)"
+                }
+            }
+        }
     }
 ]
 
@@ -265,6 +295,8 @@ async def call_tool(name: str, arguments: dict) -> dict[str, Any]:
             result = await configure_frequencies(arguments)
         elif name == "ping_device":
             result = await ping_device(arguments)
+        elif name == "get_logs":
+            result = await get_logs(arguments)
         else:
             return {"error": f"Unknown tool: {name}", "success": False}
         
@@ -359,6 +391,24 @@ async def ping_device(args: dict) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
         response = await client.post(
             f"{API_BASE_URL}/ping",
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def get_logs(args: dict) -> dict[str, Any]:
+    """Obtiene los logs de la aplicación."""
+    params = {
+        "log_type": args.get("log_type", "app"),
+        "lines": args.get("lines", 100)
+    }
+    if "search" in args:
+        params["search"] = args["search"]
+
+    async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
+        response = await client.get(
+            f"{API_BASE_URL}/logs",
             params=params
         )
         response.raise_for_status()
