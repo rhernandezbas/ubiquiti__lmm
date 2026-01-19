@@ -20,6 +20,47 @@ async def get_uisp_client() -> UISPClient:
     )
 
 
+@router.get("/list-all-aps")
+async def list_all_aps() -> Dict[str, Any]:
+    """
+    Lista todos los APs encontrados en UISP para debug
+    
+    Returns:
+        Lista de todos los APs con su información
+    """
+    try:
+        uisp_client = await get_uisp_client()
+        
+        # Obtener todos los dispositivos
+        devices = await uisp_client.get_devices()
+        
+        # Filtrar solo APs
+        ap_devices = []
+        for device in devices:
+            device_type = device.get("identification", {}).get("type", "")
+            if device_type.lower() == "ap":
+                ap_devices.append({
+                    "device_id": device.get("identification", {}).get("id"),
+                    "name": device.get("identification", {}).get("name"),
+                    "ip_address": device.get("ipAddress"),
+                    "mac_address": device.get("identification", {}).get("mac"),
+                    "model": device.get("identification", {}).get("model"),
+                    "status": device.get("status"),
+                    "stations_count": device.get("overview", {}).get("stationsCount", 0)
+                })
+        
+        return {
+            "success": True,
+            "total_devices": len(devices),
+            "total_aps": len(ap_devices),
+            "aps": ap_devices
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listando APs: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 @router.get("/get-ap-clients-by-bssid")
 async def get_ap_clients_by_bssid(
     bssid: str = Query(..., description="BSSID del AP (ej: 802AA8249E26)"),
@@ -41,28 +82,60 @@ async def get_ap_clients_by_bssid(
         # Obtener todos los dispositivos
         devices = await uisp_client.get_devices()
         
-        # Buscar el AP por BSSID
+        # Buscar el AP por BSSID con múltiples formatos
         target_ap = None
         formatted_bssid = bssid.upper().replace(":", "")
         
-        for device in devices:
-            if device.get("identification", {}).get("mac") == formatted_bssid:
-                target_ap = device
-                break
+        # Intentar diferentes formatos de BSSID
+        bssid_formats = [
+            formatted_bssid,  # 802AA8249E26
+            ":".join([formatted_bssid[i:i+2] for i in range(0, len(formatted_bssid), 2)]),  # 80:2A:A8:24:9E:26
+            "-".join([formatted_bssid[i:i+2] for i in range(0, len(formatted_bssid), 2)])   # 80-2A-A8-24-9E-26
+        ]
         
+        for device in devices:
+            device_mac = device.get("identification", {}).get("mac", "")
+            if device_mac:
+                device_mac_clean = device_mac.upper().replace(":", "").replace("-", "")
+                if device_mac_clean == formatted_bssid:
+                    target_ap = device
+                    break
+        
+        # Si no encuentra por BSSID, buscar por SSID si se proporcionó
+        if not target_ap and ssid:
+            for device in devices:
+                device_name = device.get("identification", {}).get("name", "")
+                if device_name == ssid:
+                    target_ap = device
+                    break
+        
+        # Si todavía no encuentra, buscar por nombre que contenga el SSID
+        if not target_ap and ssid:
+            for device in devices:
+                device_name = device.get("identification", {}).get("name", "")
+                if ssid.lower() in device_name.lower():
+                    target_ap = device
+                    break
+        
+        # Debug: mostrar dispositivos encontrados
         if not target_ap:
-            # Si no encuentra por BSSID, intentar por SSID si se proporcionó
+            logger.warning(f"AP no encontrado. BSSID buscado: {formatted_bssid}")
+            logger.warning(f"BSSID formats probados: {bssid_formats}")
             if ssid:
-                for device in devices:
-                    if device.get("identification", {}).get("name") == ssid:
-                        target_ap = device
-                        break
+                logger.warning(f"SSID buscado: {ssid}")
             
-            if not target_ap:
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"AP con BSSID {bssid} no encontrado en UISP"
-                )
+            # Mostrar algunos dispositivos para debug
+            ap_devices = [d for d in devices if d.get("identification", {}).get("type") == "ap"]
+            logger.warning(f"APs encontrados en UISP: {len(ap_devices)}")
+            for ap in ap_devices[:5]:  # Primeros 5 para debug
+                ap_name = ap.get("identification", {}).get("name", "Unknown")
+                ap_mac = ap.get("identification", {}).get("mac", "Unknown")
+                logger.warning(f"  - {ap_name} (MAC: {ap_mac})")
+            
+            raise HTTPException(
+                status_code=404, 
+                detail=f"AP con BSSID {bssid} no encontrado en UISP. Se buscaron {len(devices)} dispositivos."
+            )
         
         # Obtener información del AP
         ap_info = {
