@@ -10,6 +10,8 @@ python = "^3.10"
 mcp = "^1.1.2"
 httpx = "^0.26.0"
 pydantic = "^2.5.3"
+fastapi = "^0.128.0"
+uvicorn = {extras = ["standard"], version = "^0.40.0"}
 
 [tool.poetry.scripts]
 ubiquiti-llm-mcp = "server:main"

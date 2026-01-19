@@ -77,7 +77,25 @@ pip install mcp httpx pydantic
 
 ## 🚀 Uso
 
-### Configuración en Claude Desktop
+### Opción 1: Integración con n8n
+
+Para usar el servidor MCP con n8n, consulta la guía completa en [N8N_SETUP.md](N8N_SETUP.md).
+
+**Inicio rápido:**
+
+```bash
+# Iniciar servidor HTTP/SSE para n8n
+./start_n8n_server.sh
+```
+
+El servidor se iniciará en `http://localhost:3000/sse` y estará listo para conectarse desde n8n.
+
+En n8n:
+1. Agrega un nodo **"MCP Client"**
+2. Configura **SSE Endpoint**: `http://localhost:3000/sse`
+3. Conecta a un **AI Agent** (OpenAI, Anthropic, etc.)
+
+### Opción 2: Configuración en Claude Desktop
 
 1. Edita el archivo de configuración de Claude Desktop:
 
