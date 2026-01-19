@@ -20,6 +20,104 @@ async def get_uisp_client() -> UISPClient:
     )
 
 
+@router.get("/find-device-data")
+async def find_device_data(
+    query: str = Query(..., description="IP, nombre o MAC del dispositivo")
+) -> Dict[str, Any]:
+    """
+    Endpoint único que busca el dispositivo y devuelve toda la data completa
+    
+    Args:
+        query: IP, nombre o MAC del dispositivo
+        
+    Returns:
+        Data completa del dispositivo o lista de coincidencias si hay múltiples
+    """
+    try:
+        # Inicializar cliente UISP
+        uisp_client = await get_uisp_client()
+        
+        # Obtener todos los dispositivos
+        devices = await uisp_client.get_devices()
+        
+        # Buscar coincidencias exactas primero
+        query_lower = query.lower()
+        exact_matches = []
+        partial_matches = []
+        
+        for device in devices:
+            identification = device.get("identification", {})
+            ip_address = device.get("ipAddress", "")
+            name = identification.get("name", "")
+            mac = identification.get("mac", "")
+            
+            # Coincidencia exacta
+            if (query_lower == ip_address.lower() or 
+                query_lower == name.lower() or 
+                query_lower == mac.lower()):
+                
+                exact_matches.append(device)
+            # Coincidencia parcial
+            elif (query_lower in ip_address.lower() or 
+                  query_lower in name.lower() or 
+                  query_lower in mac.lower()):
+                
+                partial_matches.append(device)
+        
+        # Si hay coincidencia exacta, devolver la data completa
+        if exact_matches:
+            device_data = exact_matches[0]
+            identification = device_data.get("identification", {})
+            overview = device_data.get("overview", {})
+            overview_keys = list(overview.keys()) if overview else []
+            
+            return {
+                "found": True,
+                "match_type": "exact",
+                "device_name": identification.get("name"),
+                "device_id": identification.get("id"),
+                "ip_address": device_data.get("ipAddress"),
+                "model": identification.get("model"),
+                "mac_address": identification.get("mac"),
+                "status": device_data.get("status"),
+                "overview_keys": overview_keys,
+                "overview_full": overview,
+                "identification": identification
+            }
+        
+        # Si hay coincidencias parciales, devolver lista para elegir
+        elif partial_matches:
+            return {
+                "found": False,
+                "match_type": "partial",
+                "message": f"Se encontraron {len(partial_matches)} dispositivos que coinciden parcialmente con '{query}'",
+                "possible_matches": [
+                    {
+                        "device_id": d.get("identification", {}).get("id"),
+                        "name": d.get("identification", {}).get("name"),
+                        "ip_address": d.get("ipAddress"),
+                        "mac_address": d.get("identification", {}).get("mac"),
+                        "model": d.get("identification", {}).get("model"),
+                        "status": d.get("status")
+                    }
+                    for d in partial_matches
+                ]
+            }
+        
+        # No se encontró nada
+        else:
+            return {
+                "found": False,
+                "match_type": "none",
+                "message": f"No se encontró ningún dispositivo que coincida con '{query}'",
+                "suggestion": "Verifica la IP, nombre o MAC. Usa /search-devices para listar todos los dispositivos."
+            }
+        
+    except Exception as e:
+        logger.error(f"Error buscando dispositivo '{query}': {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error buscando dispositivo: {str(e)}")
+
+
 @router.get("/search-devices")
 async def search_devices(
     query: str = Query(..., description="Buscar por IP, nombre o MAC")
