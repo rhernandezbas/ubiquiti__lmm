@@ -567,8 +567,9 @@ async def generate_llm_analysis(
     5️⃣ APS ALTERNATIVOS:
     - Mejor AP disponible: {best_ap.get('ssid', 'N/A')} ({best_signal} dBm, {best_clients} clientes)
     - Comparación: {'Estás en el mejor AP' if is_connected_to_best else f'Mejor AP tiene {signal_diff:+d} dBm y {best_clients - current_ap_clients_real:+d} clientes'}
-    - Si hay mejor AP: menciona si vale la pena cambiar
+    - Si hay mejor AP: menciona si vale la pena cambiar teniendo en cuenta los clientes del actual y del mejor AP y a su vez los dmb de diferencia 
     - Si no hay mejor AP: confirma que el actual es óptimo
+    
 
     6️⃣ RECOMENDACIÓN NOC (CLARA Y DIRECTA):
     - Mantener AP actual (óptimo) - ya estás conectado al mejor AP
