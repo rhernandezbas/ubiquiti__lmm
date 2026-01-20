@@ -122,48 +122,80 @@ async def get_device_mode(
     try:
         conn = await ssh_client.connect(device_ip, ssh_username, ssh_password)
         
-        # Obtener configuración wireless
-        result = await ssh_client.execute_command(conn, "iwconfig ath0")
+        # Intentar múltiples comandos para detectar el modo
+        commands_to_try = [
+            "iwconfig ath0",
+            "iwconfig",
+            "cat /tmp/system.cfg | grep cfg.type",
+            "cfg -s | grep type"
+        ]
         
-        if not result["success"]:
-            return {
-                "success": False,
-                "error": result.get("stderr"),
-                "mode": "unknown",
-                "is_station": False,
-                "is_ap": False
-            }
-        
-        output = result["stdout"]
-        
-        # Parsear modo
+        raw_outputs = {}
         is_station = False
         is_ap = False
         mode = "unknown"
-        
-        for line in output.split("\n"):
-            line = line.strip()
-            
-            if "Mode:" in line:
-                mode_part = line.split("Mode:")[1].split()[0]
-                mode = mode_part
-                
-                if mode_part.lower() == "managed":
-                    is_station = True
-                elif mode_part.lower() == "master" or mode_part.lower() == "ap":
-                    is_ap = True
-                break
-        
-        # Verificar también si está conectado a un AP
         connected_to_ap = False
-        if "Access Point:" in output:
-            connected_to_ap = True
-            # Si está conectado a un AP, es una estación
-            is_station = True
-            is_ap = False
+        
+        for cmd in commands_to_try:
+            try:
+                result = await ssh_client.execute_command(conn, cmd)
+                if result["success"] and result["stdout"]:
+                    raw_outputs[cmd] = result["stdout"]
+                    
+                    output = result["stdout"]
+                    
+                    # Parsear iwconfig
+                    if "iwconfig" in cmd:
+                        for line in output.split("\n"):
+                            line = line.strip()
+                            
+                            # Detectar modo
+                            if "Mode:" in line:
+                                mode_part = line.split("Mode:")[1].split()[0]
+                                mode = mode_part
+                                
+                                if mode_part.lower() == "managed":
+                                    is_station = True
+                                elif mode_part.lower() == "master" or mode_part.lower() == "ap":
+                                    is_ap = True
+                            
+                            # Detectar si está conectado a un AP
+                            if "Access Point:" in line:
+                                connected_to_ap = True
+                                is_station = True
+                                is_ap = False
+                                
+                                # Extraer modo si no se detectó antes
+                                if mode == "unknown":
+                                    mode = "managed"
+                    
+                    # Parsear system.cfg
+                    elif "cfg.type" in cmd or "cfg -s" in cmd:
+                        for line in output.split("\n"):
+                            line = line.strip()
+                            if "cfg.type=sta" in line or "type=sta" in line:
+                                is_station = True
+                                is_ap = False
+                                mode = "managed"
+                            elif "cfg.type=ap" in line or "type=ap" in line:
+                                is_ap = True
+                                is_station = False
+                                mode = "master"
+                    
+                    # Si ya detectamos el modo, dejar de intentar
+                    if mode != "unknown":
+                        break
+                        
+            except Exception as e:
+                logger.debug(f"Comando {cmd} falló: {e}")
+                continue
         
         await conn.close()
         await conn.wait_closed()
+        
+        # Si no se detectó modo, intentar inferir por el modelo
+        if mode == "unknown":
+            logger.warning(f"No se pudo detectar modo para {device_ip}, outputs: {list(raw_outputs.keys())}")
         
         return {
             "success": True,
@@ -171,7 +203,11 @@ async def get_device_mode(
             "is_station": is_station,
             "is_ap": is_ap,
             "connected_to_ap": connected_to_ap,
-            "raw_output": output
+            "raw_outputs": raw_outputs,
+            "debug_info": {
+                "commands_tried": commands_to_try,
+                "successful_commands": list(raw_outputs.keys())
+            }
         }
         
     except Exception as e:
