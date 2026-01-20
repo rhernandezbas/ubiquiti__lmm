@@ -12,7 +12,6 @@ import json
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Query, HTTPException
 from openai import AsyncOpenAI
-
 from app.config.settings import settings
 from app.infrastructure.ssh import UbiquitiSSHClient
 from app.infrastructure.api.uisp_client import UISPClient
@@ -902,14 +901,11 @@ async def analyze_device_complete(
                 }
                 break
         
-        # PASO 4: Generar análisis LLM (versión v2 - datos brutos)
-        llm_analysis = await generate_llm_analysis_v2(
-            device_data=device_data,
-            overview=overview,
-            radio_data=radio_data,
-            interface_stats=interface_stats,
-            site_survey=survey_result,
+        # PASO 4: Generar análisis LLM (versión original)
+        llm_analysis = await generate_llm_analysis(
+            metrics=metrics,
             frequency_check=frequency_check,
+            survey_result=survey_result,
             ping_result=ping_result,
             current_ap_info=current_ap_info
         )
