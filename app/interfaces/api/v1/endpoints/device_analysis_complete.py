@@ -515,7 +515,7 @@ async def generate_llm_analysis(
 
     SITE SURVEY - MEJORES APS ENCONTRADOS:
     - Mejor AP: {best_ap.get('ssid', 'N/A')} ({best_signal} dBm, {best_clients} clientes)
-    - Segundo mejor: {second_best.get('ssid', 'N/A')} ({second_best.get('signal_dbm', 'N/A')} dBm, {second_best.get('clients_connected', 0)} clientes) if second_best else 'No disponible'
+    - Segundo mejor: {'No disponible' if not second_best else f"{second_best.get('ssid', 'N/A')} ({second_best.get('signal_dbm', 'N/A')} dBm, {second_best.get('clients_connected', 0)} clientes)"}
 
     ANÁLISIS DE CONEXIÓN:
     - ¿Estás conectado al mejor AP? {'SÍ' if is_connected_to_best else 'NO'}
