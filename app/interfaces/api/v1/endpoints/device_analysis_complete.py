@@ -452,16 +452,32 @@ async def generate_llm_analysis(
             # Recalcular diferencia de señal con la información actual
             signal_diff = best_signal - current_signal
             
-            # Lógica original para recomendar cambio
-            if signal_diff >= 5 and best_clients < current_ap_clients:
-                recommend_change = True
-                reason = f"Señal {signal_diff:+d} dBm mejor y MENOS clientes ({best_clients} vs {current_ap_clients})"
-            elif signal_diff >= 10:
-                recommend_change = True
-                reason = f"Señal {signal_diff:+d} dBm mejor"
-            elif signal_diff >= 5 and best_clients <= current_ap_clients + 3:
-                recommend_change = True
-                reason = f"Señal {signal_diff:+d} dBm mejor y carga similar ({best_clients} vs {current_ap_clients} clientes)"
+            # Lógica de ingeniero de red para recomendar cambio
+            # Considerar: capacidad actual, diferencia de señal, y carga de clientes
+            if downlink >= 80 and uplink >= 40:
+                # Si tiene buena capacidad (>80/40 Mbps), ser muy conservador
+                if signal_diff >= 15 and best_clients < current_ap_clients - 5:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor y MENOS clientes ({best_clients} vs {current_ap_clients})"
+                elif signal_diff >= 20:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor (significativa)"
+            elif downlink >= 50 and uplink >= 25:
+                # Capacidad media (50-80/25-40 Mbps)
+                if signal_diff >= 10 and best_clients < current_ap_clients:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor y MENOS clientes ({best_clients} vs {current_ap_clients})"
+                elif signal_diff >= 15:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor"
+            else:
+                # Capacidad baja (<50/25 Mbps)
+                if signal_diff >= 8 and best_clients < current_ap_clients + 2:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor y carga similar ({best_clients} vs {current_ap_clients} clientes)"
+                elif signal_diff >= 12:
+                    recommend_change = True
+                    reason = f"Señal {signal_diff:+d} dBm mejor"
             
             if recommend_change:
                 ap_info = f"\n🔄 **CAMBIO DE AP RECOMENDADO:**\n- Cambiar a: {best_ssid}\n- Razón: {reason}\n- Señal: {best_signal} dBm @ {best_ap.get('frequency_mhz')} MHz"
