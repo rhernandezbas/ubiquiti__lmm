@@ -44,11 +44,11 @@ async def validate_device_type_and_mode(
         validation_result = {
             "success": True,
             "device_model": device_model,
-            "device_type": device_type,  # "M5_AC" o "M2"
+            "device_type": device_type,  # "M2", "M5", o "AC"
             "is_station": is_station,
             "is_ap": is_ap,
             "wireless_mode": wireless_mode,
-            "supports_current_logic": device_type == "M5_AC" and is_station,
+            "supports_current_logic": device_type == "AC" and is_station,  # Solo AC + Station
             "recommendation": get_device_recommendation(device_type, is_station, is_ap),
             "mode_details": mode_result
         }
@@ -75,20 +75,30 @@ def determine_device_type(device_model: str) -> str:
         device_model: Modelo del dispositivo
         
     Returns:
-        "M5_AC" o "M2"
+        "M2", "M5", o "AC"
     """
     model_upper = device_model.upper()
     
-    # M2 Equipment - Prioridad alta
-    if model_upper == "M2" or " M2 " in model_upper or model_upper.endswith(" M2"):
-        return "M2"
+    # M2 Equipment (2.4 GHz) - Prioridad alta
+    m2_indicators = ["M2", "LOCOM2", "NANOSTATION M2", "POWERSBEAM M2", "LITEBEAM M2", "BULLET M2"]
+    for indicator in m2_indicators:
+        if indicator in model_upper:
+            return "M2"
     
-    # M5/AC Equipment - Frecuencias 5 GHz
-    if "M5" in model_upper or "AC" in model_upper:
-        return "M5_AC"
+    # AC Equipment (5 GHz AirMax/AC) - Prioridad media
+    ac_indicators = ["AC", "LBE-5AC", "LOCOAC", "NANOLOC AC", "POWERSBEAM AC", "LITEBEAM AC", "ROCKET 5AC", "5AC-GEN2"]
+    for indicator in ac_indicators:
+        if indicator in model_upper:
+            return "AC"
     
-    # Default - Asumir M5/AC para equipos desconocidos
-    return "M5_AC"
+    # M5 Equipment (5 GHz Legacy) - Prioridad baja
+    m5_indicators = ["M5", "P5B", "LOCOM5", "NANOLOC M5", "POWERSBEAM M5", "LITEBEAM M5", "ROCKET M5"]
+    for indicator in m5_indicators:
+        if indicator in model_upper:
+            return "M5"
+    
+    # Default - Asumir M5 para equipos desconocidos de 5GHz
+    return "M5"
 
 
 async def get_device_mode(
@@ -180,7 +190,7 @@ def get_device_recommendation(device_type: str, is_station: bool, is_ap: bool) -
     Obtiene recomendación basada en tipo y modo del dispositivo
     
     Args:
-        device_type: "M5_AC" o "M2"
+        device_type: "M2", "M5", o "AC"
         is_station: True si es estación
         is_ap: True si es AP
         
@@ -189,19 +199,27 @@ def get_device_recommendation(device_type: str, is_station: bool, is_ap: bool) -
     """
     if device_type == "M2":
         if is_station:
-            return "Dispositivo M2 Station - Usar lógica de frecuencias M2"
+            return "Dispositivo M2 Station - Usar lógica de frecuencias M2 (2.4 GHz)"
         elif is_ap:
-            return "Dispositivo M2 AP - Verificar clientes y configuración M2"
+            return "Dispositivo M2 AP - Verificar clientes y configuración M2 (2.4 GHz)"
         else:
             return "Dispositivo M2 - Modo no identificado"
     
-    elif device_type == "M5_AC":
+    elif device_type == "AC":
         if is_station:
-            return "Dispositivo M5/AC Station - Aplicar lógica completa actual"
+            return "Dispositivo AC Station - Aplicar lógica completa actual (5 GHz AirMax/AC)"
         elif is_ap:
-            return "Dispositivo M5/AC AP - Verificar clientes y optimización"
+            return "Dispositivo AC AP - Verificar clientes y optimización AirMax/AC"
         else:
-            return "Dispositivo M5/AC - Modo no identificado"
+            return "Dispositivo AC - Modo no identificado"
+    
+    elif device_type == "M5":
+        if is_station:
+            return "Dispositivo M5 Station - Usar lógica de frecuencias M5 (5 GHz Legacy)"
+        elif is_ap:
+            return "Dispositivo M5 AP - Verificar clientes y configuración M5 (5 GHz Legacy)"
+        else:
+            return "Dispositivo M5 - Modo no identificado"
     
     else:
         return "Tipo de dispositivo desconocido"
@@ -219,5 +237,6 @@ def should_apply_current_logic(validation_result: Dict[str, Any]) -> bool:
     """
     return (
         validation_result.get("success", False) and
-        validation_result.get("supports_current_logic", False)
+        validation_result.get("device_type") == "AC" and  # Solo equipos AC
+        validation_result.get("is_station", False)       # Solo estaciones
     )
