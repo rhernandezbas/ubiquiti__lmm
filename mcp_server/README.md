@@ -77,7 +77,7 @@ pip install mcp httpx pydantic
 
 ## 🚀 Uso
 
-### Opción 1: Integración con n8n
+### Opción 1n: Integración con n8n
 
 Para usar el servidor MCP con n8n, consulta la guía completa en [N8N_SETUP.md](N8N_SETUP.md).
 
