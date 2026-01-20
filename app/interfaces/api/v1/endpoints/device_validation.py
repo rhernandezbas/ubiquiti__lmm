@@ -119,7 +119,20 @@ async def get_device_mode(
         Diccionario con información del modo
     """
     try:
+        logger.info(f"Intentando conectar a {device_ip} con usuario {ssh_username}")
+        
         conn = await ssh_client.connect(device_ip, ssh_username, ssh_password)
+        
+        if conn is None:
+            return {
+                "success": False,
+                "error": "SSH connection returned None",
+                "mode": "unknown",
+                "is_station": False,
+                "is_ap": False
+            }
+        
+        logger.info(f"Conexión SSH establecida con {device_ip}")
         
         # Intentar múltiples comandos para detectar el modo
         commands_to_try = [
@@ -137,9 +150,12 @@ async def get_device_mode(
         
         for cmd in commands_to_try:
             try:
+                logger.debug(f"Ejecutando comando: {cmd}")
                 result = await ssh_client.execute_command(conn, cmd)
+                
                 if result["success"] and result["stdout"]:
                     raw_outputs[cmd] = result["stdout"]
+                    logger.debug(f"Comando {cmd} exitoso, output length: {len(result['stdout'])}")
                     
                     output = result["stdout"]
                     
@@ -152,6 +168,7 @@ async def get_device_mode(
                             if "Mode:" in line:
                                 mode_part = line.split("Mode:")[1].split()[0]
                                 mode = mode_part
+                                logger.debug(f"Modo detectado: {mode}")
                                 
                                 if mode_part.lower() == "managed":
                                     is_station = True
@@ -176,21 +193,30 @@ async def get_device_mode(
                                 is_station = True
                                 is_ap = False
                                 mode = "managed"
+                                logger.debug("Modo detectado como Station desde system.cfg")
                             elif "cfg.type=ap" in line or "type=ap" in line:
                                 is_ap = True
                                 is_station = False
                                 mode = "master"
+                                logger.debug("Modo detectado como AP desde system.cfg")
                     
                     # Si ya detectamos el modo, dejar de intentar
                     if mode != "unknown":
+                        logger.info(f"Modo final detectado: {mode}")
                         break
+                else:
+                    logger.debug(f"Comando {cmd} falló: {result.get('stderr', 'No output')}")
                         
             except Exception as e:
-                logger.debug(f"Comando {cmd} falló: {e}")
+                logger.debug(f"Comando {cmd} falló con excepción: {e}")
                 continue
         
-        await conn.close()
-        await conn.wait_closed()
+        # Cerrar conexión
+        try:
+            await conn.close()
+            await conn.wait_closed()
+        except Exception as e:
+            logger.warning(f"Error cerrando conexión SSH: {e}")
         
         # Si no se detectó modo, intentar inferir por el modelo
         if mode == "unknown":
