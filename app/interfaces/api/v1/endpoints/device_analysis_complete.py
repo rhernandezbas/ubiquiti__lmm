@@ -8,6 +8,7 @@ Endpoint de análisis completo de dispositivo con flujo optimizado:
 
 import logging
 import asyncio
+import json
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Query, HTTPException
 from openai import AsyncOpenAI
@@ -17,6 +18,9 @@ from app.infrastructure.ssh import UbiquitiSSHClient
 from app.infrastructure.api.uisp_client import UISPClient
 from app.utils.network_utils import ping_device
 from app.interfaces.api.v1.endpoints.device_validation import validate_device_type_and_mode, should_apply_current_logic
+
+# Cliente OpenAI
+openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -295,6 +299,127 @@ async def get_device_metrics(
     }
 
 
+async def generate_llm_analysis_v2(
+    device_data: Dict[str, Any],
+    overview: Dict[str, Any],
+    radio_data: Dict[str, Any],
+    interface_stats: Dict[str, Any],
+    site_survey: Dict[str, Any],
+    frequency_check: Dict[str, Any],
+    ping_result: Dict[str, Any],
+    current_ap_info: Dict[str, Any] = None
+) -> str:
+    """
+    Paso 4: Generar análisis LLM con formato natural (versión simplificada)
+    El LLM realiza toda la lógica de análisis a partir de los datos brutos
+    """
+    logger.info(f"🤖 Paso 4: Generando análisis con LLM (v2)")
+    
+    # Construir prompt con todos los datos brutos para que el LLM haga el análisis
+    prompt = f"""
+Actúa como un ingeniero de redes especializado en redes inalámbricas Ubiquiti. Analiza los siguientes datos de un dispositivo y genera un reporte completo en español.
+
+## DATOS DEL DISPOSITIVO
+**Nombre:** {device_data.get("identification", {}).get("name", "Desconocido")}
+**Modelo:** {device_data.get("identification", {}).get("model", "Desconocido")}
+**Firmware:** {device_data.get("identification", {}).get("software", "Desconocido")}
+**Uptime:** {overview.get("uptime", "Desconocido")}
+**CPU:** {overview.get("cpu", "Desconocido")}%
+**RAM:** {overview.get("ram", "Desconocido")}%
+
+## DATOS INALÁMBRICOS
+**Frecuencia:** {radio_data.get("frequency", "Desconocido")} GHz
+**Canal:** {radio_data.get("channel", "Desconocido")}
+**Ancho de Banda:** {radio_data.get("channelwidth", "Desconocido")} MHz
+**Potencia TX:** {radio_data.get("txpower", "Desconocido")} dBm
+**Ganancia Antena:** {radio_data.get("antennaGain", "Desconocido")} dBi
+
+## ESTADÍSTICAS DE INTERFAZ
+**Señal Actual:** {interface_stats.get("signal", "Desconocido")} dBm
+**Ruido:** {interface_stats.get("noise", "Desconocido")} dBm
+**SNR:** {interface_stats.get("snr", "Desconocido")}
+**CCQ:** {interface_stats.get("ccq", "Desconocido")}%
+**Uplink:** {interface_stats.get("tx_rate", "Desconocido")} Mbps
+**Downlink:** {interface_stats.get("rx_rate", "Desconocido")} Mbps
+
+## TRÁFICO
+**Clientes Conectados:** {overview.get("stationsCount", 0)}
+**Datos RX:** {interface_stats.get("rx_bytes", 0) / (1024**3):.2f} GB
+**Datos TX:** {interface_stats.get("tx_bytes", 0) / (1024**3):.2f} GB
+
+## SITE SURVEY (APs disponibles)
+{json.dumps(site_survey.get("aps", [])[:5], indent=2) if site_survey.get("aps") else "No hay datos"}
+
+## CONECTIVIDAD
+**Ping Reachable:** {ping_result.get("reachable", False)}
+**Latencia:** {ping_result.get("avg_latency_ms", "N/A")} ms
+**Pérdida Paquetes:** {ping_result.get("packet_loss", 0)}%
+
+## FRECUENCIAS
+{json.dumps(frequency_check, indent=2)}
+
+## AP ACTUAL
+{json.dumps(current_ap_info, indent=2) if current_ap_info else "No disponible"}
+
+## INSTRUCCIONES DE ANÁLISIS
+Genera un reporte estructurado con las siguientes secciones:
+
+### 1. RESUMEN EJECUTIVO
+- Estado general del dispositivo
+- Problemas críticos identificados
+- Recomendación principal
+
+### 2. ANÁLISIS DE CONECTIVIDAD
+- Estado del enlace (usando SNR, CCQ, señal/ruido)
+- Capacidad actual (uplink/downlink)
+- Comparación con estándares mínimos (30/15 Mbps)
+
+### 3. ANÁLISIS DE HARDWARE
+- Estado CPU/RAM
+- Uptime y estabilidad
+- Estado Ethernet
+
+### 4. ANÁLISIS DE APs DISPONIBLES
+- Si está conectado al mejor AP disponible
+- Recomendaciones de cambio si aplica
+- Considerar: diferencia de señal, carga de clientes, capacidad actual
+
+### 5. PROBLEMAS DETECTADOS
+- Listar problemas específicos con prioridad
+- Uptime bajo (< 1 día)
+- LAN limitada (10 Mbps)
+- Capacidad baja (< 30/15 Mbps)
+- Link quality bajo (< 0.7)
+- Alto consumo (> 50 GB RX o > 20 GB TX)
+
+### 6. RECOMENDACIONES
+- Acciones específicas priorizadas
+- Cambios de configuración sugeridos
+- Mantenimiento preventivo
+
+Usa emojis para hacer más visual el reporte y sé específico con las recomendaciones.
+"""
+
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un ingeniero de redes experto en Ubiquiti, analiza dispositivos y genera reportes detallados en español."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        llm_analysis = response.choices[0].message.content
+        logger.info("✅ Análisis LLM v2 generado exitosamente")
+        return llm_analysis
+        
+    except Exception as e:
+        logger.error(f"❌ Error generando análisis LLM v2: {e}")
+        return f"❌ Error generando análisis: {str(e)}"
+
+
 async def generate_llm_analysis(
     metrics: Dict[str, Any],
     frequency_check: Dict[str, Any],
@@ -303,7 +428,7 @@ async def generate_llm_analysis(
     current_ap_info: Dict[str, Any] = None
 ) -> str:
     """
-    Paso 4: Generar análisis LLM con formato natural
+    Paso 4: Generar análisis LLM con formato natural (versión original)
     """
     logger.info(f"🤖 Paso 4: Generando análisis con LLM")
     
@@ -745,11 +870,46 @@ async def analyze_device_complete(
             interfaces=interfaces
         )
         
-        # PASO 4: Generar análisis LLM
-        llm_analysis = await generate_llm_analysis(
-            metrics=metrics,
+        # Extraer datos brutos para LLM v2
+        overview = device_data.get("overview", {})
+        
+        # Buscar datos de radio en interfaces
+        radio_data = {}
+        interface_stats = {}
+        for iface in interfaces:
+            iface_type = iface.get("identification", {}).get("type")
+            if iface_type == "wireless":
+                wireless = iface.get("wireless", {})
+                radio_data = {
+                    "frequency": wireless.get("frequency", 0) / 1000,  # Convertir a GHz
+                    "channel": wireless.get("channel", "Desconocido"),
+                    "channelwidth": wireless.get("channelwidth", "Desconocido"),
+                    "txpower": wireless.get("txpower", "Desconocido"),
+                    "antennaGain": wireless.get("antennaGain", "Desconocido")
+                }
+                
+                # Estadísticas de la interfaz wireless
+                stats = iface.get("statistics", {})
+                interface_stats = {
+                    "signal": stats.get("signal", "Desconocido"),
+                    "noise": stats.get("noise", "Desconocido"),
+                    "snr": stats.get("signal", 0) - stats.get("noise", 0) if stats.get("signal") and stats.get("noise") else 0,
+                    "ccq": stats.get("ccq", "Desconocido"),
+                    "tx_rate": stats.get("txRate", 0) / 1000000,  # Convertir a Mbps
+                    "rx_rate": stats.get("rxRate", 0) / 1000000,  # Convertir a Mbps
+                    "rx_bytes": stats.get("rxbytes", 0),
+                    "tx_bytes": stats.get("txbytes", 0)
+                }
+                break
+        
+        # PASO 4: Generar análisis LLM (versión v2 - datos brutos)
+        llm_analysis = await generate_llm_analysis_v2(
+            device_data=device_data,
+            overview=overview,
+            radio_data=radio_data,
+            interface_stats=interface_stats,
+            site_survey=survey_result,
             frequency_check=frequency_check,
-            survey_result=survey_result,
             ping_result=ping_result,
             current_ap_info=current_ap_info
         )
