@@ -3,7 +3,7 @@ Validaciones de tipo de dispositivo y modo de operación
 """
 
 from typing import Dict, Any, Optional
-from app.infrastructure.ssh.ubiquiti_ssh_client import UbiquitiSSHClient
+from app.infrastructure.ssh import UbiquitiSSHClient
 from app.config.device_frequencies import get_frequencies_for_model
 import logging
 
