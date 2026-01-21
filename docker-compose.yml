@@ -4,8 +4,9 @@ services:
     container_name: ubiquiti-llm-api
     ports:
       - "7657:8000"
-    env_file:
-      - .env
+    environment:
+      ENCRYPTION_KEY: dUHtiKbiYEEW4I9uRgE5nXf2FZB3x6hNRARg9TQHvGU=
+      OPENAI_API_KEY: Z0FBQUFBQnBjTkd4S2UyblV3ZG42MTFiaVV2QkZSSjN2TV9HWGNBX0JVTWpUcnVITG5qM2NfV0d3b0JtUHVRVENhWEgwWklTTk9tbkNtOGJTRGwyczFNYjJ6STliVldxdVc0VGtPTGlDNUNZQThmZS1URGRsNWFCb1NmR0VGeFhtYkFZdEVnRG1Qa2pkcFp6VElGR2x2VG1zVXBNN1g2bUVhY1pRREcyZHFZSUpSVEZGYVZ5WVNicFRiN2FnUThpRzU2MUwzZ1BPaTBXOUIwUW9mVFZIMUFoWGdHNUpvUEhSUGxFTzdmdXZ2aVVnbWYyNnJINkVtajhhTXNUOHFwNVVhMU1Cd2x2Z05iVUhEb084RzNPYnpnLXVBWVRkNDM1Q3ZFRHRrYWcyOVNtUXM4dV9yVEJ1VGc9
     volumes:
       - ./logs:/app/logs
       - ./app_fast_api:/app/app_fast_api

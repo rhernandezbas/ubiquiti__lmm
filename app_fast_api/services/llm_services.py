@@ -3,7 +3,9 @@
 """
 
 import logging
+import os
 from openai import AsyncOpenAI
+from app_fast_api.services.api_key_service import api_key_service
 
 
 logger = logging.getLogger(__name__)
@@ -13,10 +15,25 @@ class LLMService:
     Servicio LLM simplificado.
     Esta clase solo mantiene la configuración básica del cliente.
     """
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: str = None, model: str = "gpt-4o-mini"):
+        # Si no se proporciona API Key, obtener de variable de entorno
+        if not api_key:
+            api_key = api_key_service.get_api_key_from_env()
+        
+        if not api_key:
+            raise ValueError("❌ No se encontró API Key de OpenAI. Configura OPENAI_API_KEY.")
+        
+        # Validar formato de API Key
+        if not api_key_service.validate_api_key(api_key):
+            raise ValueError("❌ API Key de OpenAI inválida.")
+        
         self.api_key = api_key
         self.model = model
         self.client = AsyncOpenAI(api_key=api_key)
+        
+        # Enmascarar API Key para logs
+        masked_key = api_key_service.mask_api_key(api_key)
+        logger.info(f"🤖 LLM Service inicializado con API Key: {masked_key}")
 
 
 
