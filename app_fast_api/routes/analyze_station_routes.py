@@ -150,10 +150,22 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
             "device_info": device_info_detail,
             "scan_results": scan_result,
             "connectivity": ping_result,
-            "lan_info": await _get_lan_info(device.ip, ssh_service),
-            "capacity": await _get_capacity_info(device_data, ssh_service),
-            "link_quality": await _calculate_link_quality(device_info_detail, ping_result, scan_result),
-            "ap_info": await _get_current_ap_info(device.ip, ssh_service)
+            "lan_info": {
+                "ip_address": device_data.get("overview", {}).get("ipAddress", "N/A"),
+                "ip_address_list": device_data.get("overview", {}).get("ipAddressList", []),
+                "interface_id": device_data.get("mainInterfaceSpeed", {}).get("interfaceId", "eth0"),
+                "available_speed": device_data.get("mainInterfaceSpeed", {}).get("availableSpeed", "N/A")
+            },
+            "capacity": {
+                "downlink_mbps": device_data.get("statistics", {}).get("rxRate", 0) // 1000000 if device_data.get("statistics", {}).get("rxRate") else 0,
+                "uplink_mbps": device_data.get("statistics", {}).get("txRate", 0) // 1000000 if device_data.get("statistics", {}).get("txRate") else 0
+            },
+            "link_quality": {
+                "overall_score": device_data.get("linkQuality", {}).get("overallScore", 0),
+                "downlink_score": device_data.get("linkQuality", {}).get("downlinkScore", 0),
+                "uplink_score": device_data.get("linkQuality", {}).get("uplinkScore", 0)
+            },
+            "ap_info": await analyze_service.get_current_ap_data(device_data)
         }
 
         logger.info(f"✅ Data completa para el prompt: {complete_data}")
