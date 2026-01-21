@@ -104,8 +104,23 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         
         logger.info(f"✅ Dispositivo encontrado: {device_data.get('identification', {}).get('name', 'Unknown')}")
         
-        # Paso 2: Escanear APs cercanos
-        logger.info("📡 Paso 2: Escaneando APs cercanos...")
+        # Paso 2: Verificar conectividad con ping (10 segundos)
+        logger.info("🏓 Paso 2: Verificando conectividad con ping (10 segundos)...")
+        ping_result = await ssh_service.ping_device_seconds(device.ip, 10)
+        
+        if not ping_result.get("success", False):
+            logger.warning(f"⚠️ Dispositivo {device.ip} no responde a ping")
+            return {
+                "status": "error",
+                "message": f"Dispositivo {device.ip} no responde a ping",
+                "device_info": device_data,
+                "ping_result": ping_result
+            }
+        
+        logger.info(f"✅ Ping exitoso: {ping_result.get('avg_latency', 'N/A')}ms de latencia")
+        
+        # Paso 3: Escanear APs cercanos
+        logger.info("📡 Paso 3: Escaneando APs cercanos...")
         scan_result = await ssh_service.scan_nearby_aps_detailed(
             device.ip, 
             device.interface, 
@@ -124,14 +139,14 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         
         logger.info(f"✅ Escaneo completado: {scan_result.get('total_aps', 0)} APs encontrados")
         
-        # Paso 3: Analizar con LLM
-        logger.info("🤖 Paso 3: Generando análisis con LLM...")
+        # Paso 4: Analizar con LLM
+        logger.info("🤖 Paso 4: Generando análisis con LLM...")
         
         # Preparar datos para LLM
         complete_data = {
             "device_info": await analyze_service.get_device_data(device_data),
             "scan_results": scan_result,
-            "connectivity": await ssh_service.ping_device_seconds(device.ip, 10),
+            "connectivity": ping_result,  # Usar el ping del paso 2
             "lan_info": {},  # TODO: Implementar obtención de info LAN
             "capacity": {},  # TODO: Implementar obtención de capacidad
             "link_quality": {}  # TODO: Implementar cálculo de calidad de enlace
@@ -151,8 +166,8 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         
         logger.info(f"✅ Análisis LLM generado: {len(llm_analysis)} caracteres")
         
-        # Paso 4: Guardar en base de datos
-        logger.info("💾 Paso 4: Guardando análisis en base de datos...")
+        # Paso 5: Guardar en base de datos
+        logger.info("💾 Paso 5: Guardando análisis en base de datos...")
         try:
             analysis = data_service.save_device_analysis(complete_data, llm_analysis)
             logger.info(f"✅ Análisis guardado con ID: {analysis.id}")
@@ -166,6 +181,7 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
             "message": "Análisis completado exitosamente",
             "device_info": complete_data.get("device_info"),
             "scan_results": scan_result,
+            "ping_result": ping_result,  # Agregar resultado del ping
             "llm_analysis": llm_analysis,
             "analysis_id": analysis.id if 'analysis' in locals() else None,
             "timestamp": logger.info("🎉 Análisis completado exitosamente")
