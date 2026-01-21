@@ -18,21 +18,21 @@ class LLMService:
     def __init__(self, api_key: str = None, model: str = "gpt-4o-mini"):
         # Si no se proporciona API Key, obtener de variable de entorno
         if not api_key:
-            api_key = api_key_service.get_api_key_from_env()
+            api_key = os.getenv("OPENAI_API_KEY")
         
         if not api_key:
             raise ValueError("❌ No se encontró API Key de OpenAI. Configura OPENAI_API_KEY.")
         
         # Validar formato de API Key
-        if not api_key_service.validate_api_key(api_key):
-            raise ValueError("❌ API Key de OpenAI inválida.")
+        if not api_key.startswith("sk-"):
+            logger.warning("⚠️ API Key no empieza con 'sk-', usando de todas formas")
         
         self.api_key = api_key
         self.model = model
         self.client = AsyncOpenAI(api_key=api_key)
         
         # Enmascarar API Key para logs
-        masked_key = api_key_service.mask_api_key(api_key)
+        masked_key = api_key[:8] + "..." + api_key[-8:] if len(api_key) > 16 else "***"
         logger.info(f"🤖 LLM Service inicializado con API Key: {masked_key}")
 
 
