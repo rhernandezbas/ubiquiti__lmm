@@ -32,11 +32,30 @@ def get_services():
     global _uisp_service, _llm_service, _ssh_service, _analyze_service, _data_service
     
     if _uisp_service is None:
-        _uisp_service = UISPService("https://190.7.234.36/", "cb53a0bc-48e8-480c-aa47-19e1042e4897")
-        _llm_service = LLMService()  # Usará API Key de variable de entorno (codificada)
-        _ssh_service = UbiquitiSSHClient()
-        _analyze_service = AnalyzeStationsServices(_llm_service, _uisp_service, _ssh_service)
-        _data_service = UbiquitiDataService()
+        try:
+            logger.info("🔧 Inicializando servicios...")
+            
+            _uisp_service = UISPService("https://190.7.234.36/", "cb53a0bc-48e8-480c-aa47-19e1042e4897")
+            logger.info("✅ UISP Service inicializado")
+            
+            _llm_service = LLMService()  # Usará API Key de variable de entorno (codificada)
+            logger.info("✅ LLM Service inicializado")
+            
+            _ssh_service = UbiquitiSSHClient()
+            logger.info("✅ SSH Service inicializado")
+            
+            _analyze_service = AnalyzeStationsServices(_llm_service, _uisp_service, _ssh_service)
+            logger.info("✅ Analyze Service inicializado")
+            
+            _data_service = UbiquitiDataService()
+            logger.info("✅ Data Service inicializado")
+            
+            logger.info("🎉 Todos los servicios inicializados correctamente")
+            
+        except Exception as e:
+            logger.error(f"❌ Error inicializando servicios: {str(e)}")
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"Error inicializando servicios: {str(e)}")
     
     return _uisp_service, _llm_service, _ssh_service, _analyze_service, _data_service
 
