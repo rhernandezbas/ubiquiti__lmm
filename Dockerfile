@@ -27,12 +27,12 @@ COPY . .
 RUN mkdir -p logs
 
 # Copy postmant script
-COPY postmant /usr/local/bin/postmant
-RUN chmod +x /usr/local/bin/postmant
+# COPY postmant /usr/local/bin/postmant
+# RUN chmod +x /usr/local/bin/postmant
 
 # Copy api key service script
-COPY scripts/encode_api_key.py /usr/local/bin/encode_api_key.py
-RUN chmod +x /usr/local/bin/encode_api_key.py
+# COPY scripts/encode_api_key.py /usr/local/bin/encode_api_key.py
+# RUN chmod +x /usr/local/bin/encode_api_key.py
 
 EXPOSE 8000
 

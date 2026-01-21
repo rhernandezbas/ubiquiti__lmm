@@ -135,11 +135,15 @@ jobs:
             
             echo "✅ Docker disponible: $(docker --version)"
             
-            # Verificar estado de Docker
-            if ! sudo systemctl is-active --quiet docker; then
-              echo "❌ Docker no está corriendo, iniciando..."
-              sudo systemctl start docker
-              sleep 5
+            # Verificar si Docker está corriendo (sin sudo)
+            if ! docker info &> /dev/null; then
+              echo "❌ Docker no está corriendo, intentando iniciar sin sudo..."
+              # Intentar iniciar Docker sin sudo
+              docker info &> /dev/null || {
+                echo "❌ No se puede iniciar Docker sin permisos"
+                echo "🔍 Requiere acceso root o configuración de Docker"
+                exit 1
+              }
             fi
             
             echo "✅ Docker corriendo"
