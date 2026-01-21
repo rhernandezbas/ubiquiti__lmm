@@ -125,7 +125,37 @@ jobs:
           script: |
             cd /opt/ubiquiti-llm
             
-            # Verificar que los contenedores están corriendo
+            echo "🔍 Verificando estado del sistema..."
+            
+            # Verificar Docker
+            if ! command -v docker &> /dev/null; then
+              echo "❌ Docker no está instalado"
+              exit 1
+            fi
+            
+            echo "✅ Docker disponible: $(docker --version)"
+            
+            # Verificar estado de Docker
+            if ! sudo systemctl is-active --quiet docker; then
+              echo "❌ Docker no está corriendo, iniciando..."
+              sudo systemctl start docker
+              sleep 5
+            fi
+            
+            echo "✅ Docker corriendo"
+            
+            # Verificar contenedores
+            echo "📊 Verificando contenedores..."
+            docker compose ps -a
+            
+            # Si no están corriendo, levantarlos
+            if ! docker compose ps | grep -q "Up"; then
+              echo "🚀 Levantando contenedores..."
+              docker compose up --build -d
+              sleep 10
+            fi
+            
+            # Verificar que estén corriendo
             if docker compose ps | grep -q "Up"; then
               echo "✅ Contenedores corriendo correctamente"
               echo ""
@@ -137,13 +167,22 @@ jobs:
               echo "🏥 Health check: http://190.7.234.37:7657/health"
               echo ""
               echo "📋 Logs de la API:"
-              docker compose logs --tail=20 api
+              docker compose logs --tail=10 api
               echo ""
-              echo "🔍 Verificando health endpoint..."
-              curl -f http://localhost:7657/health || echo "⚠️  Health check falló"
-              exit 0
+              echo "🔍 Variables de entorno:"
+              docker compose exec api env | grep -E "(ENCRYPTION_KEY|OPENAI_API_KEY)" || echo "Variables no encontradas"
             else
               echo "❌ Error: Contenedores no están corriendo"
-              docker compose logs --tail=50
+              echo ""
+              echo "📋 Logs de error:"
+              docker compose logs api
+              echo ""
+              echo "🔍 Intentando diagnóstico:"
+              docker compose ps -a
+              echo ""
+              echo "📊 Estado del sistema:"
+              df -h
+              free -h
+              docker system df
               exit 1
             fi
