@@ -142,18 +142,137 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         # Paso 4: Analizar con LLM
         logger.info("🤖 Paso 4: Generando análisis con LLM...")
         
-        # Preparar datos para LLM
-        complete_data = {
-            "device_info": await analyze_service.get_device_data(device_data),
-            "scan_results": scan_result,
-            "connectivity": ping_result,  # Usar el ping del paso 2
-            "lan_info": {},  # TODO: Implementar obtención de info LAN
-            "capacity": {},  # TODO: Implementar obtención de capacidad
-            "link_quality": {}  # TODO: Implementar cálculo de calidad de enlace
-        }
+        # Obtener información detallada del dispositivo
+        device_info_detail = await analyze_service.get_device_data(device_data)
         
-        # Generar análisis LLM
-        llm_analysis = await llm_service.analyze(complete_data)
+        # Construir data completa para el prompt
+        complete_data = {
+            "device_info": device_info_detail,
+            "scan_results": scan_result,
+            "connectivity": ping_result,
+            "lan_info": await _get_lan_info(device.ip, ssh_service),
+            "capacity": await _get_capacity_info(device_data, ssh_service),
+            "link_quality": await _calculate_link_quality(device_info_detail, ping_result, scan_result),
+            "ap_info": await _get_current_ap_info(device.ip, ssh_service)
+        }
+
+        logger.info(f"✅ Data completa para el prompt: {complete_data}")
+        
+        # Construir prompt con toda la data
+        prompt = f"""
+Actúa como operador NOC de primer nivel de un ISP.
+
+Analiza el siguiente dispositivo y responde de forma SIMPLE, DIRECTA y OPERATIVA.
+Evita explicaciones largas o teóricas. Usa solo los datos disponibles.
+
+========================
+DISPOSITIVO
+========================
+- Nombre: {complete_data['device_info'].get('name', 'Unknown')}
+- Modelo: {complete_data['device_info'].get('model', 'Unknown')}
+- Rol: {complete_data['device_info'].get('role', 'Unknown')}
+- IP: {complete_data['device_info'].get('ip', device.ip)}
+- MAC: {complete_data['device_info'].get('mac', 'Unknown')}
+
+HARDWARE:
+- CPU: {complete_data['device_info'].get('cpu_percent', 0)}%
+- RAM: {complete_data['device_info'].get('ram_percent', 0)}%
+
+========================
+CONECTIVIDAD (PING)
+========================
+- Latencia promedio: {complete_data['connectivity'].get('avg_latency', 'N/A')} ms
+- Pérdida de paquetes: {complete_data['connectivity'].get('packet_loss', 0)}%
+- Estado de ping: {complete_data['connectivity'].get('status', 'Unknown')}
+
+========================
+LAN
+========================
+- IP LAN: {complete_data['lan_info'].get('ip_address', 'N/A')}
+- Interfaces IP: {complete_data['lan_info'].get('ip_address_list', [])}
+- Puerto: {complete_data['lan_info'].get('interface_id', 'N/A')}
+- Velocidad Ethernet: {complete_data['lan_info'].get('available_speed', 'N/A')}
+
+========================
+WIRELESS ACTUAL
+========================
+- Señal: {complete_data['device_info'].get('signal_dbm', 'N/A')} dBm
+- Frecuencia: {complete_data['device_info'].get('frequency_mhz', 'N/A')} MHz
+- AP conectado: {complete_data['ap_info'].get('name', 'N/A')} ({complete_data['ap_info'].get('model', 'N/A')})
+- clientes: {complete_data['ap_info'].get('clients', 0)}
+
+========================
+CAPACIDAD
+========================
+- Downlink: {complete_data['capacity'].get('downlink_mbps', 0)} Mbps
+- Uplink: {complete_data['capacity'].get('uplink_mbps', 0)} Mbps
+
+========================
+LINK SCORE
+========================
+- Score total: {complete_data['link_quality'].get('overall_score', 0)}
+- Downlink score: {complete_data['link_quality'].get('downlink_score', 0)}
+- Uplink score: {complete_data['link_quality'].get('uplink_score', 0)}
+
+========================
+SCAN / SITE SURVEY
+========================
+- APS detectados: {complete_data['scan_results'].get('total_aps', 0)}
+- APS disponibles:
+{complete_data['scan_results'].get('our_aps', [])}
+
+========================
+FORMATO DE RESPUESTA (OBLIGATORIO)
+========================
+
+1️⃣ CONECTIVIDAD (PING):
+- Latencia: {complete_data['connectivity'].get('avg_latency', 'N/A')} ms → Buena / Aceptable / Alta
+- Pérdida: {complete_data['connectivity'].get('packet_loss', 0)}% → OK / Problema
+- Diagnóstico de conectividad: OK / DEGRADADO / CRÍTICO
+
+2️⃣ ESTADO GENERAL:
+- Estado del equipo: OK / DEGRADADO / CRÍTICO
+- Motivo principal (1 línea, claro y técnico)
+
+3️⃣ LAN:
+- Velocidad Ethernet: {complete_data['lan_info'].get('available_speed', 'N/A')}
+- ¿Es un cuello de botella?: Sí / No
+
+4️⃣ WIRELESS / AP ACTUAL:
+- AP actual: {complete_data['ap_info'].get('name', 'N/A')}
+- Señal: {complete_data['device_info'].get('signal_dbm', 'N/A')} dBm → Excelente / Buena / Regular / Mala
+- Frecuencia: {complete_data['device_info'].get('frequency_mhz', 'N/A')} MHz
+- Capacidad: {complete_data['capacity'].get('downlink_mbps', 0)}/{complete_data['capacity'].get('uplink_mbps', 0)} Mbps
+- AP actual adecuado: Sí / No
+
+5️⃣ APS ALTERNATIVOS (SCAN):
+- ¿Hay APs mejores?: Sí / No
+- Si hay mejores:
+  - Indicar AP recomendado
+  - Comparar señal (dBm) y carga
+  - Considerar cambio solo si:
+    - Diferencia ≤ 3 dBm
+    - Menor cantidad de clientes
+- Si no hay mejores:
+  - Confirmar que el AP actual es el óptimo
+
+6️⃣ LINK SCORE:
+- Score total: {complete_data['link_quality'].get('overall_score', 0)}
+- Evaluación: Excelente / Bueno / Regular / Malo
+- Impacta en el servicio: Sí / No
+
+7️⃣ RECOMENDACIÓN NOC (UNA SOLA, CLARA):
+- Mantener AP actual (óptimo)
+- Cambiar a AP [nombre] (mejor balance señal/clientes)
+- Monitorear
+- Ajustar RF
+- Escalar a técnico de campo
+
+Usa nombres reales de los APs y decisiones basadas en señal, ping y carga.
+"""
+        
+        # Generar análisis LLM con el prompt construido
+        llm_analysis = await llm_service.analyze({"prompt": prompt})
         
         if not llm_analysis:
             logger.error("❌ Error generando análisis LLM")
@@ -194,95 +313,3 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}\n{traceback.format_exc()}")
 
-@router.post("/identify-device")
-async def identify_device(device: DeviceRequest) -> Dict[str, Any]:
-    """
-    Identifica un dispositivo por IP o MAC
-    """
-    try:
-        logger.info(f"🔍 Identificando dispositivo: IP={device.ip}, MAC={device.mac}")
-        
-        uisp_service, _, _, _, _ = get_services()
-        device_data = await uisp_service.get_device_by_ip(device.ip)
-        
-        if not device_data:
-            return {
-                "status": "error",
-                "message": f"Dispositivo {device.ip} no encontrado",
-                "device_found": False
-            }
-        
-        return {
-            "status": "success",
-            "message": "Dispositivo encontrado",
-            "device_found": True,
-            "device_data": device_data
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error identificando dispositivo: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/enable-frequencies")
-async def enable_frequencies(request: FrequencyRequest) -> Dict[str, Any]:
-    """
-    Habilita frecuencias para M5/M2
-    """
-    try:
-        logger.info(f"📡 Habilitando frecuencias para dispositivo {request.ip}")
-        
-        _, _, ssh_service, _, _ = get_services()
-        
-        result = await ssh_service.enable_all_m5_frequencies(
-            request.ip,
-            request.device_model,
-            request.username,
-            request.password
-        )
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"❌ Error habilitando frecuencias: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/wait-for-connection")
-async def wait_for_connection(request: PingRequest) -> Dict[str, Any]:
-    """
-    Espera a que el dispositivo vuelva a estar online después de habilitar frecuencias
-    """
-    try:
-        logger.info(f"⏳ Esperando reconexión de dispositivo {request.ip}")
-        
-        _, _, ssh_service, _, _ = get_services()
-        
-        result = await ssh_service.ping_until_connected(
-            request.ip,
-            request.max_wait_time,
-            request.check_interval
-        )
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"❌ Error esperando conexión: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/flow-status/{ip}")
-async def get_flow_status(ip: str) -> Dict[str, Any]:
-    """
-    Obtiene el estado actual del flujo para una IP
-    """
-    try:
-        logger.info(f"📊 Obteniendo estado del flujo para {ip}")
-        
-        # TODO: Implementar estado del flujo
-        return {
-            "status": "pending",
-            "ip": ip,
-            "message": "Estado del flujo no implementado aún"
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error obteniendo estado del flujo: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
