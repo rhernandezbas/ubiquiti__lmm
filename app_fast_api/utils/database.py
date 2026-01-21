@@ -9,8 +9,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://ipnext:1234@190.7.234.37:4456/ipnext")
-# DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ubiquiti_monitoring.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Validar que DATABASE_URL esté configurada
+if not DATABASE_URL:
+    logger.error("❌ DATABASE_URL no está configurada en las variables de entorno")
+    raise ValueError("DATABASE_URL es requerida. Configúrala en docker-compose.yml o variables de entorno")
 
 # Create engine
 engine = create_engine(DATABASE_URL)
