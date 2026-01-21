@@ -40,5 +40,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the application with postmant
-CMD ["/usr/local/bin/postmant", "python", "-m", "uvicorn", "app_fast_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the application directly without postmant
+CMD ["python", "-m", "uvicorn", "app_fast_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
