@@ -132,15 +132,15 @@ jobs:
               echo "📊 Estado de servicios:"
               docker compose ps
               echo ""
-              echo "🌐 API disponible en: http://190.7.234.37:7444"
-              echo "📖 Documentación: http://190.7.234.37:7444/docs"
-              echo "🏥 Health check: http://190.7.234.37:7444/health"
+              echo "🌐 API disponible en: http://190.7.234.37:7657"
+              echo "📖 Documentación: http://190.7.234.37:7657/docs"
+              echo "🏥 Health check: http://190.7.234.37:7657/health"
               echo ""
               echo "📋 Logs de la API:"
               docker compose logs --tail=20 api
               echo ""
               echo "🔍 Verificando health endpoint..."
-              curl -f http://localhost:7444/health || echo "⚠️  Health check falló"
+              curl -f http://localhost:7657/health || echo "⚠️  Health check falló"
               exit 0
             else
               echo "❌ Error: Contenedores no están corriendo"
