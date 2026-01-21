@@ -1,9 +1,14 @@
 import uvicorn
+import os
+from dotenv import load_dotenv
 from app_fast_api import create_app
 from app_fast_api.utils.database import init_db, engine, Base
 from app_fast_api.models.ubiquiti_monitoring.device_analysis import DeviceAnalysis
 from app_fast_api.models.ubiquiti_monitoring.feedback import Feedback
 import logging
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
