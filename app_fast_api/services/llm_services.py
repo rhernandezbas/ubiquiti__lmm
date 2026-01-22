@@ -5,7 +5,6 @@
 import logging
 import os
 from openai import AsyncOpenAI
-from app_fast_api.services.api_key_service import api_key_service
 
 
 logger = logging.getLogger(__name__)

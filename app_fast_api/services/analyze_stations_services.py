@@ -1,4 +1,4 @@
-""""""
+import re
 from app_fast_api.services.llm_services import LLMService
 from app_fast_api.services.uisp_services import UISPService
 from app_fast_api.services.ubiquiti_ssh_client import UbiquitiSSHClient
@@ -161,7 +161,6 @@ class AnalyzeStationsServices:
         }
         return processed_data
 
-
     async def enabled_frecuency(self, model: str, ip: str):
         """"""
         try:
@@ -173,31 +172,42 @@ class AnalyzeStationsServices:
                 pass
             else:
                 raise ValueError(f"Modelo no soportado: {model}")
-                
+
             return {"status": "success", "model": model, "ip": ip}
-            
+
         except Exception as e:
             return {"status": "error", "error": str(e), "model": model, "ip": ip}
 
-    def match_scanned_aps_with_device(self, scanned_aps: dict, device_data: dict) -> list:
+    def match_scanned_aps_with_device(self, scanned_aps: dict, device_data: dict) -> dict:
         """
-        Matchea APs escaneados con el dispositivo específico
-        
+        Matchea APs escaneados con el dispositivo específico y los separa en nuestros vs extranjeros
+
         Args:
             scanned_aps: Datos de APs escaneados (resultado de scan_nearby_aps_detailed)
             device_data: Datos del dispositivo UISP
-            
+
         Returns:
-            Lista de APs que matchean con el dispositivo
+            Dict con:
+            - our_aps: Lista de APs nuestros (que hacen match)
+            - foreign_aps: Lista de APs extranjeros (que no hacen match)
+            - our_aps_count: Cantidad de APs nuestros
+            - foreign_aps_count: Cantidad de APs extranjeros
+            - matched_aps: Lista de APs con info de match (para compatibilidad)
         """
         if not scanned_aps or not device_data:
-            return []
-        
+            return {
+                "our_aps": [],
+                "foreign_aps": [],
+                "our_aps_count": 0,
+                "foreign_aps_count": 0,
+                "matched_aps": []
+            }
+
         matched_aps = []
         device_mac = device_data.get("mac", "").lower()
         device_name = device_data.get("name", "").lower()
         device_ip = device_data.get("ipAddress", "").lower()
-        
+
         # Si scanned_aps tiene formato directo (lista de APs)
         if isinstance(scanned_aps, list):
             aps_list = scanned_aps
@@ -205,12 +215,18 @@ class AnalyzeStationsServices:
         elif isinstance(scanned_aps, dict) and "aps" in scanned_aps:
             aps_list = scanned_aps["aps"]
         else:
-            return []
-        
+            return {
+                "our_aps": [],
+                "foreign_aps": [],
+                "our_aps_count": 0,
+                "foreign_aps_count": 0,
+                "matched_aps": []
+            }
+
         for ap in aps_list:
             ap_bssid = ap.get("bssid", "").lower()
             ap_ssid = ap.get("ssid", "").lower()
-            
+
             # Match por BSSID/MAC (prioridad alta)
             if ap_bssid == device_mac:
                 matched_aps.append({
@@ -235,16 +251,42 @@ class AnalyzeStationsServices:
                     "match_reason": f"SSID '{ap_ssid}' contiene parcialmente el nombre '{device_name}'",
                     "confidence": "low"
                 })
-        
-        return matched_aps
+            # Match por patrones conocidos de nuestra red (prioridad media-baja)
+            elif self._is_our_ap_by_pattern(ap_ssid, ap_bssid):
+                matched_aps.append({
+                    "scanned_ap": ap,
+                    "match_type": "pattern_match",
+                    "match_reason": f"SSID '{ap_ssid}' o BSSID '{ap_bssid}' coincide con patrones de nuestra red",
+                    "confidence": "medium"
+                })
+
+        # Separar en nuestros y extranjeros
+        our_aps_bssid = {match["scanned_ap"]["bssid"] for match in matched_aps}
+
+        our_aps = []
+        foreign_aps = []
+
+        for ap in aps_list:
+            if ap["bssid"] in our_aps_bssid:
+                our_aps.append(ap)
+            else:
+                foreign_aps.append(ap)
+
+        return {
+            "our_aps": our_aps,
+            "foreign_aps": foreign_aps,
+            "our_aps_count": len(our_aps),
+            "foreign_aps_count": len(foreign_aps),
+            "matched_aps": matched_aps  # Para compatibilidad
+        }
 
     async def get_current_ap_data(self, device_data: dict) -> dict:
         """
         Obtiene los datos completos del AP actual al que está conectado el dispositivo
-        
+
         Args:
             device_data: Datos del dispositivo desde UISP
-            
+
         Returns:
             Dict con información completa del AP actual
         """
@@ -252,31 +294,31 @@ class AnalyzeStationsServices:
             # Extraer información del AP actual desde device_data
             attributes = device_data.get("attributes", {})
             ap_device = attributes.get("apDevice", {})
-            
+
             if not ap_device:
                 return {
                     "status": "error",
                     "error": "No se encontró información del AP en device_data"
                 }
-            
+
             ap_id = ap_device.get("id")
             ap_name = ap_device.get("name", "N/A")
             ap_model = ap_device.get("model", "N/A")
             ap_type = ap_device.get("type", "N/A")
             site_id = ap_device.get("siteId", "N/A")
-            
+
             logger.info(f"Buscando AP actual: {ap_name} ({ap_model})")
-            
+
             # Obtener todos los dispositivos UISP para encontrar el AP completo
             all_uisp_devices = await self.uisp_service.get_all_uisp_devices()
-            
+
             # Buscar el AP por ID
             ap_complete_data = None
             for device in all_uisp_devices:
                 if device.get("identification", {}).get("id") == ap_id:
                     ap_complete_data = device
                     break
-            
+
             if not ap_complete_data:
                 return {
                     "status": "error",
@@ -288,10 +330,10 @@ class AnalyzeStationsServices:
                         "site_id": site_id
                     }
                 }
-            
+
             # Extraer información completa del AP
             overview = ap_complete_data.get("overview", {})
-            
+
             ap_data = {
                 "status": "success",
                 "basic_info": {
@@ -325,59 +367,55 @@ class AnalyzeStationsServices:
                 },
                 "full_uisp_data": ap_complete_data
             }
-            
+
             logger.info(f"AP actual encontrado: {ap_name} con {ap_data['clients']['total_clients']} clientes")
             return ap_data
-            
+
         except Exception as e:
             return {
                 "status": "error",
                 "error": str(e)
             }
 
-    async def scan_and_match_aps_direct(self, device_data: dict, interface: str = "ath0", username: str = "ubnt", password: str = "ubnt") -> dict:
+    async def scan_and_match_aps_direct(self, device_data: dict, interface: str = "ath0") -> dict:
         """
         Escanea APs y hace match usando device_data ya obtenido (evita doble consulta a UISP)
-        Identifica APs propios por BSSID y extrae clientes actuales
-        
+        Identifica APs propios por BSSID de UISP y separa los que no son nuestros
+
         Args:
             device_data: Datos del dispositivo ya obtenidos de UISP
             interface: Interfaz wireless (default: ath0)
-            username: Usuario SSH
-            password: Contraseña SSH
-            
+
         Returns:
             Diccionario con resultados del escaneo y matching
         """
         try:
             # Obtener IP del dispositivo ya obtenido
             ip = device_data.get("ipAddress", "")
-            
+
             if not ip:
                 return {
                     "status": "error",
                     "error": "No se encontró IP en device_data"
                 }
-            
-            # 1. Escanear APs cercanos
+
+            # 1. Escanear APs cercanos usando la función ya establecida
             scan_result = await self.ssh_service.scan_nearby_aps_detailed(
                 host=ip,
-                interface=interface,
-                username=username,
-                password=password
+                interface=interface
             )
-            
+
             if not scan_result.get("success", False):
                 return {
                     "status": "error",
                     "error": "No se pudo escanear APs",
                     "scan_error": scan_result.get("error")
                 }
-            
+
             # 2. Obtener APs escaneados primero para saber qué BSSIDs buscar
             scanned_aps = scan_result.get("aps", [])
             logger.info(f"Total APs escaneados: {len(scanned_aps)}")
-            
+
             if not scanned_aps:
                 logger.warning("No se encontraron APs escaneados")
                 return {
@@ -403,17 +441,17 @@ class AnalyzeStationsServices:
                         "device_found_in_uisp": bool(device_data)
                     }
                 }
-            
+
             # Extraer BSSIDs del escaneo para buscar solo esos en UISP
             scanned_bssids = [ap.get("bssid", "").lower() for ap in scanned_aps]
             logger.info(f"BSSIDs escaneados a buscar en UISP: {scanned_bssids}")
-            
+
             # Obtener todos los dispositivos UISP pero filtrar por BSSIDs escaneados
             logger.info("Obteniendo dispositivos UISP para BSSIDs escaneados...")
             all_uisp_devices = await self.uisp_service.get_all_uisp_devices()
-            
+
             uisp_aps_by_bssid = {}
-            
+
             # Crear mapa de BSSID -> info AP solo para BSSIDs escaneados
             logger.info("Identificando APs UISP que coinciden con escaneo...")
             ap_count = 0
@@ -432,17 +470,17 @@ class AnalyzeStationsServices:
                             "frequency": device.get("overview", {}).get("frequency", "N/A")
                         }
                         logger.info(f"AP propio encontrado en escaneo: {uisp_aps_by_bssid[mac]['name']} ({mac})")
-            
+
             logger.info(f"Total APs UISP mapeados del escaneo: {ap_count}")
-            
+
             # 3. Procesar APs escaneados y clasificar
             our_aps = []
             foreign_aps = []
-            
+
             for i, ap in enumerate(scanned_aps):
                 bssid = ap.get("bssid", "").lower()
                 logger.debug(f"Analizando AP #{i+1}: {bssid} - {ap.get('ssid', 'N/A')}")
-                
+
                 ap_info = {
                     "bssid": ap.get("bssid"),
                     "ssid": ap.get("ssid"),
@@ -452,7 +490,7 @@ class AnalyzeStationsServices:
                     "quality": ap.get("quality"),
                     "encrypted": ap.get("encrypted")
                 }
-                
+
                 if bssid in uisp_aps_by_bssid:
                     # Es nuestro AP - agregar info de UISP
                     uisp_ap = uisp_aps_by_bssid[bssid]
@@ -477,19 +515,19 @@ class AnalyzeStationsServices:
                     })
                     foreign_aps.append(ap_info)
                     logger.info(f"AP externo: {ap.get('ssid', 'N/A')}")
-            
+
             logger.info(f"Resumen: {len(our_aps)} APs propios, {len(foreign_aps)} APs externos")
-            
+
             # 4. Hacer matching específico para nuestro dispositivo
             matched_aps = self.match_scanned_aps_with_device(scan_result, device_data)
-            
+
             # 5. Analizar dispositivo completo
             processed_data = await self.get_device_data(device_data)
-            
+
             # 6. Agregar información de APs
             if matched_aps:
                 processed_data["matched_aps"] = matched_aps
-            
+
             return {
                 "status": "success",
                 "device_info": {
@@ -513,11 +551,12 @@ class AnalyzeStationsServices:
                     "device_found_in_uisp": bool(device_data)
                 }
             }
-            
+
         except Exception as e:
+            logger.error(f"Error en scan_and_match_aps_direct: {str(e)}")
             return {
                 "status": "error",
                 "error": str(e),
-                "ip": ip
+                "ip": device_data.get("ipAddress", "")
             }
 

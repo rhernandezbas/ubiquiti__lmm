@@ -288,8 +288,7 @@ class UbiquitiSSHClient:
                 "second_scan_success": result["success"],
                 "delay_seconds": 20,
                 "total_aps": len(aps),
-                "aps": aps,
-                "raw_output": output
+                "aps": aps
             }
             
         except Exception as e:

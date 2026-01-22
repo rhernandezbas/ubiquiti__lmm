@@ -1,14 +1,16 @@
-import uvicorn
+# Cargar variables de entorno desde .env ANTES de cualquier importación
 import os
 from dotenv import load_dotenv
+load_dotenv()
+
+import uvicorn
 from app_fast_api import create_app
 from app_fast_api.utils.database import init_db, engine, Base
-from app_fast_api.models.ubiquiti_monitoring.device_analysis import DeviceAnalysis
-from app_fast_api.models.ubiquiti_monitoring.feedback import Feedback
 import logging
 
-# Cargar variables de entorno desde .env
-load_dotenv()
+# Debug: Verificar si DATABASE_URL se cargó
+database_url = os.getenv("DATABASE_URL")
+print(f"🔍 DATABASE_URL cargada: {database_url}")
 
 logger = logging.getLogger(__name__)
 

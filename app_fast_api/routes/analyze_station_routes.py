@@ -5,10 +5,8 @@ Routes para analizar estaciones y dispositivos Ubiquiti
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
-import logging
 import traceback
-import asyncio
-
+from datetime import datetime
 from app_fast_api.services.uisp_services import UISPService
 from app_fast_api.services.llm_services import LLMService
 from app_fast_api.services.ubiquiti_ssh_client import UbiquitiSSHClient
@@ -108,7 +106,7 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
         logger.info("🏓 Paso 2: Verificando conectividad con ping (10 segundos)...")
         ping_result = await ssh_service.ping_device_seconds(device.ip, 10)
         
-        if not ping_result.get("success", False):
+        if not ping_result.get("status") == "success":
             logger.warning(f"⚠️ Dispositivo {device.ip} no responde a ping")
             return {
                 "status": "error",
@@ -117,15 +115,13 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
                 "ping_result": ping_result
             }
         
-        logger.info(f"✅ Ping exitoso: {ping_result.get('avg_latency', 'N/A')}ms de latencia")
+        logger.info(f"✅ Ping exitoso: {ping_result.get('avg_ms', 'N/A')}ms de latencia")
         
-        # Paso 3: Escanear APs cercanos
-        logger.info("📡 Paso 3: Escaneando APs cercanos...")
-        scan_result = await ssh_service.scan_nearby_aps_detailed(
-            device.ip, 
-            device.interface, 
-            device.username, 
-            device.password
+        # Paso 3: Escanear y filtrar APs (usando función directa)
+        logger.info("📡 Paso 3: Escaneando y filtrando APs...")
+        scan_result = await analyze_service.scan_and_match_aps_direct(
+            device_data=device_data,
+            interface="ath0"
         )
         
         if not scan_result.get("success", False):
@@ -134,41 +130,76 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
                 "status": "error",
                 "message": "Error escaneando APs",
                 "error": scan_result.get("error"),
-                "device_info": device_data
+                "device_info": device_data,
+                "ping_result": ping_result
             }
         
-        logger.info(f"✅ Escaneo completado: {scan_result.get('total_aps', 0)} APs encontrados")
+        logger.info(f"✅ Escaneo completado: {scan_result.get('our_aps_count', 0)} APs nuestros, {scan_result.get('foreign_aps_count', 0)} APs extranjeros")
         
         # Paso 4: Analizar con LLM
         logger.info("🤖 Paso 4: Generando análisis con LLM...")
         
         # Obtener información detallada del dispositivo
         device_info_detail = await analyze_service.get_device_data(device_data)
+        analysis = device_info_detail
         
-        # Construir data completa para el prompt
+        # Construir data completa para el prompt con la estructura correcta
         complete_data = {
-            "device_info": device_info_detail,
-            "scan_results": scan_result,
-            "connectivity": ping_result,
+            "device_info": {
+                "ip": device.ip,
+                "mac": device.mac if device.mac else 'No especificada',
+                "identified_model": analysis.get('basic_info', {}).get('model', 'N/A'),
+                "name": analysis.get('basic_info', {}).get('name', 'N/A'),
+                "model": analysis.get('basic_info', {}).get('model', 'N/A'),
+                "role": analysis.get('basic_info', {}).get('role', 'N/A'),
+                "signal_dbm": analysis.get('signal_info', {}).get('signal_dbm', 'N/A'),
+                "frequency_mhz": analysis.get('signal_info', {}).get('frequency_mhz', 'N/A'),
+                "cpu_percent": analysis.get('system_info', {}).get('cpu_usage_percent', 'N/A'),
+                "ram_percent": analysis.get('system_info', {}).get('ram_usage_percent', 'N/A')
+            },
             "lan_info": {
-                "ip_address": device_data.get("overview", {}).get("ipAddress", "N/A"),
-                "ip_address_list": device_data.get("overview", {}).get("ipAddressList", []),
-                "interface_id": device_data.get("mainInterfaceSpeed", {}).get("interfaceId", "eth0"),
-                "available_speed": device_data.get("mainInterfaceSpeed", {}).get("availableSpeed", "N/A")
+                "ip_address": analysis.get('basic_info', {}).get('ip_address', 'N/A'),
+                "ip_address_list": device_data.get('ipAddressList', []),
+                "interface_id": analysis.get('interface_info', {}).get('interface_id', 'N/A'),
+                "available_speed": analysis.get('interface_info', {}).get('available_speed', 'N/A')
             },
             "capacity": {
-                "downlink_mbps": device_data.get("statistics", {}).get("rxRate", 0) // 1000000 if device_data.get("statistics", {}).get("rxRate") else 0,
-                "uplink_mbps": device_data.get("statistics", {}).get("txRate", 0) // 1000000 if device_data.get("statistics", {}).get("txRate") else 0
+                "downlink_mbps": analysis.get('capacity_info', {}).get('downlink_capacity_mbps', 'N/A'),
+                "uplink_mbps": analysis.get('capacity_info', {}).get('uplink_capacity_mbps', 'N/A')
             },
             "link_quality": {
-                "overall_score": device_data.get("linkQuality", {}).get("overallScore", 0),
-                "downlink_score": device_data.get("linkQuality", {}).get("downlinkScore", 0),
-                "uplink_score": device_data.get("linkQuality", {}).get("uplinkScore", 0)
+                "overall_score": analysis.get('link_info', {}).get('overall_score', 'N/A'),
+                "uplink_score": analysis.get('link_info', {}).get('uplink_score', 'N/A'),
+                "downlink_score": analysis.get('link_info', {}).get('downlink_score', 'N/A')
             },
-            "ap_info": await analyze_service.get_current_ap_data(device_data)
+            "ap_info": {
+                "name": analysis.get('ap_info', {}).get('ap_name', 'N/A'),
+                "model": analysis.get('ap_info', {}).get('ap_model', 'N/A'),
+                "ip": analysis.get('ap_info', {}).get('ap_ip', '0.0.0.0'),
+                "mac": analysis.get('ap_info', {}).get('ap_mac', '00:00:00:00:00:00'),
+                "site_name": analysis.get('ap_info', {}).get('ap_site_name', 'Unknown'),
+                "total_clients": 0,
+                "active_clients": 0
+            },
+            "scan_results": {
+                "total_aps": scan_result.get('our_aps_count', 0) + scan_result.get('foreign_aps_count', 0),
+                "our_aps": scan_result.get('our_aps', []),
+                "foreign_aps": scan_result.get('foreign_aps', []),
+                "our_aps_count": scan_result.get('our_aps_count', 0),
+                "foreign_aps_count": scan_result.get('foreign_aps_count', 0)
+            },
+            "connectivity": {
+                "ping_avg_ms": ping_result.get('avg_ms', 'N/A'),
+                "packet_loss": ping_result.get('packet_loss', 100),
+                "ping_status": ping_result.get('status', 'error')
+            }
         }
 
         logger.info(f"✅ Data completa para el prompt: {complete_data}")
+        
+        # Debug: Verificar ping_result
+        logger.info(f"🔍 Ping result completo: {ping_result}")
+        logger.info(f"🔍 Ping avg_ms: {ping_result.get('avg_ms')} (tipo: {type(ping_result.get('avg_ms'))})")
         
         # Construir prompt con toda la data
         prompt = f"""
@@ -238,7 +269,7 @@ FORMATO DE RESPUESTA (OBLIGATORIO)
 ========================
 
 1️⃣ CONECTIVIDAD (PING):
-- Latencia: {complete_data['connectivity'].get('avg_latency', 'N/A')} ms → Buena / Aceptable / Alta
+- Latencia: {complete_data['connectivity'].get('ping_avg_ms', 'N/A')} ms → Buena / Aceptable / Alta
 - Pérdida: {complete_data['connectivity'].get('packet_loss', 0)}% → OK / Problema
 - Diagnóstico de conectividad: OK / DEGRADADO / CRÍTICO
 
@@ -299,9 +330,21 @@ Usa nombres reales de los APs y decisiones basadas en señal, ping y carga.
         
         # Paso 5: Guardar en base de datos
         logger.info("💾 Paso 5: Guardando análisis en base de datos...")
+        analysis_id = None
         try:
-            analysis = data_service.save_device_analysis(complete_data, llm_analysis)
-            logger.info(f"✅ Análisis guardado con ID: {analysis.id}")
+            # Preparar llm_analysis como diccionario con la estructura esperada
+            llm_analysis_dict = {
+                "summary": llm_analysis,  # El análisis completo como summary
+                "recommendations": [],  # TODO: Extraer recomendaciones del LLM
+                "diagnosis": "Generated by LLM analysis",
+                "needs_frequency_enable": False,
+                "generated_at": datetime.now().isoformat(),
+                "model": "gpt-4o-mini"
+            }
+            analysis = data_service.save_device_analysis(complete_data, llm_analysis_dict)
+            if analysis and hasattr(analysis, 'id'):
+                analysis_id = analysis.id
+                logger.info(f"✅ Análisis guardado con ID: {analysis_id}")
         except Exception as e:
             logger.warning(f"⚠️ Error guardando en base de datos: {str(e)}")
             # Continuar aunque falle el guardado
@@ -314,7 +357,7 @@ Usa nombres reales de los APs y decisiones basadas en señal, ping y carga.
             "scan_results": scan_result,
             "ping_result": ping_result,  # Agregar resultado del ping
             "llm_analysis": llm_analysis,
-            "analysis_id": analysis.id if 'analysis' in locals() else None,
+            "analysis_id": analysis_id,
             "timestamp": logger.info("🎉 Análisis completado exitosamente")
         }
         
