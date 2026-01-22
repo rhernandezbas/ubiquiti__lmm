@@ -251,14 +251,6 @@ class AnalyzeStationsServices:
                     "match_reason": f"SSID '{ap_ssid}' contiene parcialmente el nombre '{device_name}'",
                     "confidence": "low"
                 })
-            # Match por patrones conocidos de nuestra red (prioridad media-baja)
-            elif self._is_our_ap_by_pattern(ap_ssid, ap_bssid):
-                matched_aps.append({
-                    "scanned_ap": ap,
-                    "match_type": "pattern_match",
-                    "match_reason": f"SSID '{ap_ssid}' o BSSID '{ap_bssid}' coincide con patrones de nuestra red",
-                    "confidence": "medium"
-                })
 
         # Separar en nuestros y extranjeros
         our_aps_bssid = {match["scanned_ap"]["bssid"] for match in matched_aps}
@@ -519,10 +511,22 @@ class AnalyzeStationsServices:
             logger.info(f"Resumen: {len(our_aps)} APs propios, {len(foreign_aps)} APs externos")
 
             # 4. Hacer matching específico para nuestro dispositivo
-            matched_aps = self.match_scanned_aps_with_device(scan_result, device_data)
+            logger.info("🔍 Haciendo matching específico para dispositivo...")
+            try:
+                matched_aps = self.match_scanned_aps_with_device(scan_result, device_data)
+                logger.info(f"✅ Matching completado: {len(matched_aps.get('matched_aps', []))} APs matcheados")
+            except Exception as match_error:
+                logger.error(f"❌ Error en matching: {str(match_error)}")
+                matched_aps = []
 
             # 5. Analizar dispositivo completo
-            processed_data = await self.get_device_data(device_data)
+            logger.info("📊 Analizando dispositivo completo...")
+            try:
+                processed_data = await self.get_device_data(device_data)
+                logger.info("✅ Análisis de dispositivo completado")
+            except Exception as analysis_error:
+                logger.error(f"❌ Error en análisis de dispositivo: {str(analysis_error)}")
+                processed_data = {}
 
             # 6. Agregar información de APs
             if matched_aps:
@@ -538,9 +542,7 @@ class AnalyzeStationsServices:
                 },
                 "scan_results": scan_result,
                 "our_aps": our_aps,  # Nuestros APs con info de clientes
-                "foreign_aps": foreign_aps,  # APs ajenos
-                "matched_aps": matched_aps,
-                "matched_count": len(matched_aps),
+                "foreign_aps": foreign_aps,
                 "full_analysis": processed_data,
                 "summary": {
                     "total_scanned_aps": len(scanned_aps),

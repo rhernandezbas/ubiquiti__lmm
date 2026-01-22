@@ -124,7 +124,7 @@ async def analyze_station(device: DeviceRequest) -> Dict[str, Any]:
             interface="ath0"
         )
         
-        if not scan_result.get("success", False):
+        if not scan_result.get("status") == "success":
             logger.warning(f"⚠️ Error en escaneo de APs: {scan_result.get('error', 'Unknown error')}")
             return {
                 "status": "error",
