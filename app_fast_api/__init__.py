@@ -4,6 +4,7 @@ from app_fast_api.routes.ssh_test import router as ssh_test_router
 from app_fast_api.routes.analyze_station_routes import router as analyze_station_router
 from app_fast_api.routes.feedback_routes import router as feedback_router
 from app_fast_api.routes.logs_routes import router as logs_router
+from app_fast_api.routes.alerting_routes import router as alerting_router
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         debug=True
     )
-    
+
     # Configurar timeouts para operaciones largas
     from fastapi import Request
     @app.middleware("http")
@@ -23,7 +24,7 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         response.headers["X-Process-Time"] = "long-operation-enabled"
         return response
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -31,18 +32,21 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Incluir rutas de SSH test
     app.include_router(ssh_test_router)
-    
+
     # Incluir rutas de análisis de estaciones
     app.include_router(analyze_station_router)
-    
+
     # Incluir rutas de feedback
     app.include_router(feedback_router)
-    
+
     # Incluir rutas de logs
     app.include_router(logs_router)
+
+    # Incluir rutas de alerting
+    app.include_router(alerting_router)
     
     @app.on_event("startup")
     async def startup_event():
