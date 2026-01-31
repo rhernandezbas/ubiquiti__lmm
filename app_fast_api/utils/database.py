@@ -38,26 +38,29 @@ def init_db():
     """Initialize database tables."""
     logger.info("Inicializando base de datos...")
     logger.info(f"Conectando a: {DATABASE_URL}")
-    
+
     try:
         # Import all models here to ensure they are registered
         from app_fast_api.models.ubiquiti_monitoring.device_analysis import DeviceAnalysis, ScanResult, FrequencyChange
         from app_fast_api.models.ubiquiti_monitoring.feedback import Feedback
-        
+        from app_fast_api.models.ubiquiti_monitoring.alerting import SiteMonitoring, AlertEvent
+
         # Create all tables
         Base.metadata.create_all(bind=engine)
-        logger.info("Tablas de base de datos creadas exitosamente")
+        logger.info("✅ Tablas de base de datos creadas exitosamente")
         logger.info("Tablas disponibles:")
         logger.info("   - device_analysis")
-        logger.info("   - scan_results") 
+        logger.info("   - scan_results")
         logger.info("   - frequency_changes")
         logger.info("   - feedback")
-        
+        logger.info("   - site_monitoring (NEW)")
+        logger.info("   - alert_events (NEW)")
+
         if "sqlite" in DATABASE_URL:
             logger.info("Usando SQLite local")
         elif "mysql" in DATABASE_URL:
             logger.info("Usando MySQL")
-        
+
     except Exception as e:
-        logger.error(f"Error inicializando base de datos: {str(e)}")
+        logger.error(f"❌ Error inicializando base de datos: {str(e)}")
         raise
