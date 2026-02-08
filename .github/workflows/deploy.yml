@@ -16,6 +16,18 @@ jobs:
 
       - name: Setup VPS and Deploy
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          UISP_BASE_URL: ${{ secrets.UISP_BASE_URL }}
+          UISP_TOKEN: ${{ secrets.UISP_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WHATSAPP_API_URL: ${{ secrets.WHATSAPP_API_URL }}
+          WHATSAPP_ENABLED: ${{ secrets.WHATSAPP_ENABLED }}
+          WHATSAPP_PHONE_COMPLETE: ${{ secrets.WHATSAPP_PHONE_COMPLETE }}
+          WHATSAPP_PHONE_SUMMARY: ${{ secrets.WHATSAPP_PHONE_SUMMARY }}
+          POLLING_ENABLED: ${{ secrets.POLLING_ENABLED }}
+          POLLING_INTERVAL_SECONDS: ${{ secrets.POLLING_INTERVAL_SECONDS }}
+          ALERT_OUTAGE_THRESHOLD_PERCENT: ${{ secrets.ALERT_OUTAGE_THRESHOLD_PERCENT }}
         with:
           host: "190.7.234.37"
           username: "root"
@@ -67,24 +79,36 @@ jobs:
               git pull origin main
             fi
             
-            # Crear archivo .env si no existe
-            if [ ! -f ".env" ]; then
-              echo "📝 Creando archivo .env..."
-              echo "# UISP Configuration" > .env
-              echo "UISP_BASE_URL=https://190.7.234.36/" >> .env
-              echo "UISP_TOKEN=cb53a0bc-48e8-480c-aa47-19e1042e4897" >> .env
-              echo "" >> .env
-              echo "# SSH Configuration" >> .env
-              echo "UBIQUITI_SSH_USERNAME=ubnt" >> .env
-              echo "UBIQUITI_SSH_PASSWORD=B8d7f9ub1234!" >> .env
-              echo "" >> .env
-              echo "# OpenAI Configuration" >> .env
-              echo "OPENAI_API_KEY=$(echo 'c2stcHJvai1TTHlIZGZuY1kwUW45Zk9lQ203UTlId0lkSkNJZFNEc3Z4RXVKMTBPWnVaREJfTzhjek1SeGx4b2loYklRU2NUTG12Z01fNWtIcFQzQmxia0ZKaWx3R0ZZNXJXM1VXOWNwYlZ6a2dYTEVyQ0JRWTdKRkk2UmFuUDNDWXVMblZqTFJTTU5IUm9BQms3WG1FdTlyb2pWMGhEN3VUWUE=' | base64 -d)" >> .env
-              echo "LLM_MODEL=gpt-4o-mini" >> .env
-              echo "" >> .env
-              echo "# Logging Configuration" >> .env
-              echo "LOG_LEVEL=INFO" >> .env
-            fi
+            # Generar archivo .env desde GitHub Secrets
+            echo "📝 Generando archivo .env desde GitHub Secrets..."
+            cat > .env << 'ENVFILE'
+            # UISP Configuration
+            UISP_BASE_URL=$UISP_BASE_URL
+            UISP_TOKEN=$UISP_TOKEN
+
+            # OpenAI Configuration
+            OPENAI_API_KEY=$OPENAI_API_KEY
+            LLM_MODEL=gpt-4o-mini
+
+            # Database Configuration
+            DATABASE_URL=$DATABASE_URL
+
+            # Logging Configuration
+            LOG_LEVEL=INFO
+
+            # WhatsApp Service Configuration
+            WHATSAPP_API_URL=$WHATSAPP_API_URL
+            WHATSAPP_ENABLED=$WHATSAPP_ENABLED
+            WHATSAPP_PHONE_COMPLETE=$WHATSAPP_PHONE_COMPLETE
+            WHATSAPP_PHONE_SUMMARY=$WHATSAPP_PHONE_SUMMARY
+
+            # Alerting & Polling Configuration
+            POLLING_ENABLED=$POLLING_ENABLED
+            POLLING_INTERVAL_SECONDS=$POLLING_INTERVAL_SECONDS
+            ALERT_OUTAGE_THRESHOLD_PERCENT=$ALERT_OUTAGE_THRESHOLD_PERCENT
+            ENVFILE
+
+            echo "✅ Archivo .env generado correctamente"
             
             # Detener contenedores existentes
             echo "🛑 Deteniendo contenedores..."
