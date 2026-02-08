@@ -81,7 +81,7 @@ jobs:
             
             # Generar archivo .env desde GitHub Secrets
             echo "📝 Generando archivo .env desde GitHub Secrets..."
-            cat > .env << 'ENVFILE'
+            cat > .env << ENVFILE
             # UISP Configuration
             UISP_BASE_URL=$UISP_BASE_URL
             UISP_TOKEN=$UISP_TOKEN
