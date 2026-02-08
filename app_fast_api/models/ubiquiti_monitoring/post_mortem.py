@@ -66,8 +66,8 @@ class AlertNotification(Base):
     error_message = Column(Text, nullable=True)
     provider_message_id = Column(String(255), nullable=True)  # ID del proveedor (WhatsApp, etc.)
 
-    # Metadata adicional
-    metadata = Column(JSON, default=dict)
+    # Metadata adicional (renamed from 'metadata' to avoid SQLAlchemy reserved word)
+    notification_metadata = Column(JSON, default=dict)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
