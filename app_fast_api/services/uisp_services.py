@@ -50,3 +50,25 @@ class UISPService:
         except Exception as e:
             logger.error(f'[get_device_ssids]:Error getting devices from UISP: {e}')
             raise Exception(f"[get_device_ssids]:Error al obtener dispositivos de UISP: {e}")
+
+    async def get_device_statistics(self, device_id: str, interval: str = 'fourhours') -> Optional[Dict[str, Any]]:
+        """
+        Get device statistics from UISP.
+
+        Args:
+            device_id: UISP device UUID
+            interval: Time interval - 'hour', 'fourhours', 'day', 'week', 'month'
+
+        Returns:
+            Dictionary with timeseries data
+        """
+        try:
+            response = await self.session.get(f'/v2.1/devices/{device_id}/statistics?interval={interval}')
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError as e:
+            logger.error(f'[get_device_statistics]: Error getting statistics for device {device_id}: {e}')
+            return None
+        except Exception as e:
+            logger.error(f'[get_device_statistics]: Unexpected error: {e}')
+            return None

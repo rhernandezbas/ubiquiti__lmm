@@ -10,7 +10,15 @@ from datetime import datetime
 from enum import Enum
 
 from app_fast_api.services.alerting_services import UNMSAlertingService, AlertEventService
-from app_fast_api.repositories.alerting_repositories import SiteMonitoringRepository, AlertEventRepository
+from app_fast_api.services.whatsapp_service import WhatsAppService
+from app_fast_api.services.post_mortem_service import PostMortemService
+from app_fast_api.services.polling_service import initialize_polling_service, get_polling_service
+from app_fast_api.repositories.alerting_repositories import (
+    SiteMonitoringRepository,
+    AlertEventRepository,
+    PostMortemRepository,
+    AlertNotificationRepository
+)
 from app_fast_api.models.ubiquiti_monitoring.alerting import AlertSeverity, AlertStatus, EventType
 from app_fast_api.utils.logger import get_logger
 
@@ -34,6 +42,21 @@ unms_service = UNMSAlertingService(
 )
 
 event_service = AlertEventService(event_repo=event_repo)
+
+whatsapp_service = WhatsAppService()
+
+# Initialize post-mortem service
+pm_repo = PostMortemRepository()
+pm_service = PostMortemService(pm_repo=pm_repo, event_repo=event_repo)
+
+# Initialize notification repository
+notification_repo = AlertNotificationRepository()
+
+# Initialize polling service (will auto-start if POLLING_ENABLED=true)
+polling_service = initialize_polling_service(
+    alerting_service=unms_service,
+    whatsapp_service=whatsapp_service
+)
 
 
 # ============== Pydantic Models ==============
@@ -97,6 +120,48 @@ class EventResponse(BaseModel):
     event_id: Optional[int] = None
 
 
+class TestNotificationRequest(BaseModel):
+    """Request for testing WhatsApp notifications"""
+    type: str = Field(..., description="Notification type: 'complete', 'summary', or 'recovery'")
+    site_id: Optional[str] = Field(None, description="Optional site ID for testing")
+
+
+class ScanSitesWithAlertsResponse(BaseModel):
+    """Response for scan with WhatsApp alerts"""
+    success: bool
+    message: str
+    summary: Dict[str, Any]
+    notifications_sent: Dict[str, Any]
+
+
+class CreatePostMortemRequest(BaseModel):
+    """Request for creating a post-mortem"""
+    alert_event_id: int = Field(..., description="Alert event ID")
+    title: Optional[str] = Field(None, description="Post-mortem title")
+    summary: Optional[str] = Field(None, description="Incident summary")
+    root_cause: Optional[str] = Field(None, description="Root cause analysis")
+    impact_description: Optional[str] = Field(None, description="Impact description")
+    author: Optional[str] = Field(None, description="Author name")
+    timeline_events: Optional[List[Dict[str, Any]]] = Field(None, description="Timeline events")
+    preventive_actions: Optional[List[Dict[str, Any]]] = Field(None, description="Preventive actions")
+    action_items: Optional[List[Dict[str, Any]]] = Field(None, description="Action items")
+
+
+class UpdatePostMortemRequest(BaseModel):
+    """Request for updating a post-mortem"""
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    root_cause: Optional[str] = None
+    trigger: Optional[str] = None
+    impact_description: Optional[str] = None
+    resolution_description: Optional[str] = None
+    lessons_learned: Optional[str] = None
+    timeline_events: Optional[List[Dict[str, Any]]] = None
+    response_actions: Optional[List[Dict[str, Any]]] = None
+    preventive_actions: Optional[List[Dict[str, Any]]] = None
+    action_items: Optional[List[Dict[str, Any]]] = None
+
+
 # ============== Site Monitoring Endpoints ==============
 
 @router.post("/scan-sites", response_model=ScanSitesResponse)
@@ -118,6 +183,177 @@ async def scan_all_sites() -> ScanSitesResponse:
     except Exception as e:
         logger.error(f"Error scanning sites: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error scanning sites: {str(e)}")
+
+
+@router.post("/scan-sites-with-alerts", response_model=ScanSitesWithAlertsResponse)
+async def scan_sites_with_whatsapp_alerts() -> ScanSitesWithAlertsResponse:
+    """
+    Scan all sites and send WhatsApp notifications for outages and recoveries.
+
+    This endpoint:
+    1. Checks if UISP is available (prevents false alerts)
+    2. Scans all sites from UNMS
+    3. Detects outages (>95% devices down)
+    4. Detects recoveries
+    5. Sends WhatsApp alerts (complete + summary messages)
+    6. Returns summary of notifications sent
+
+    **Important**: Will NOT send alerts if UISP is unavailable to prevent false positives.
+    """
+    try:
+        logger.info("Starting site scan with WhatsApp alerts")
+
+        result = await unms_service.scan_and_alert_sites_with_whatsapp(whatsapp_service)
+
+        if not result.get('success'):
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Scan with alerts failed: {error_msg}")
+            raise HTTPException(status_code=503, detail=error_msg)
+
+        summary = result.get('summary', {})
+        notifications = result.get('notifications', {})
+
+        return ScanSitesWithAlertsResponse(
+            success=True,
+            message=f"Scan completed: {summary.get('total_sites', 0)} sites checked, "
+                    f"{notifications.get('outage_alerts_sent', 0)} outage alerts sent, "
+                    f"{notifications.get('recovery_alerts_sent', 0)} recovery alerts sent",
+            summary=summary,
+            notifications_sent=notifications
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scanning sites with alerts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error scanning sites with alerts: {str(e)}")
+
+
+@router.post("/test-notification")
+async def test_whatsapp_notification(request: TestNotificationRequest) -> Dict[str, Any]:
+    """
+    Test WhatsApp notification sending.
+
+    Args:
+        type: Notification type - 'complete', 'summary', or 'recovery'
+        site_id: Optional site ID for testing with real site data
+
+    Examples:
+        ```bash
+        # Test complete message
+        curl -X POST http://localhost:7657/api/v1/alerting/test-notification \\
+          -H "Content-Type: application/json" \\
+          -d '{"type": "complete"}'
+
+        # Test summary message
+        curl -X POST http://localhost:7657/api/v1/alerting/test-notification \\
+          -H "Content-Type: application/json" \\
+          -d '{"type": "summary", "site_id": "test-site-123"}'
+        ```
+    """
+    try:
+        logger.info(f"Testing WhatsApp notification: type={request.type}")
+
+        # Create mock data for testing
+        mock_site_data = {
+            "identification": {
+                "name": "[TEST] Test Site" if not request.site_id else f"[TEST] {request.site_id}",
+                "id": request.site_id or "test-site-123"
+            },
+            "description": {
+                "deviceCount": 69,
+                "deviceOutageCount": 65,
+                "contact": {
+                    "name": "Test Contact",
+                    "phone": "2324500057",
+                    "email": "test@example.com"
+                },
+                "note": """Tipo de acceso: Ingreso libre
+Tiene baterías: Si
+Duración estimada: 4 Horas
+Nombre: Eden Nis 1697321-01
+Teléfono: 0800-999-3336 (24h)
+Nodo vecino para recuperación: Arzobispado
+AP que se puede utilizar: Hornet_Arzo_Nissan
+Se manda guardia solo si: Corte de fibra para grupo
+Horarios permitidos: 24h / 365 días"""
+            }
+        }
+
+        mock_event_data = {
+            "detected_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "recovered_at": datetime.now().strftime('%H:%M:%S'),
+            "downtime_minutes": 155
+        }
+
+        # Send appropriate message based on type
+        result = {}
+
+        if request.type == "complete":
+            complete_msg = whatsapp_service.format_complete_message(mock_site_data, mock_event_data)
+            if whatsapp_service.phone_complete:
+                result["complete"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_complete,
+                    f"🧪 TEST MESSAGE\n\n{complete_msg}"
+                )
+            else:
+                result["complete"] = {"error": "No phone number configured for complete messages"}
+
+        elif request.type == "summary":
+            summary_msg = whatsapp_service.format_summary_message(mock_site_data, mock_event_data)
+            if whatsapp_service.phone_summary:
+                result["summary"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_summary,
+                    f"🧪 TEST MESSAGE\n\n{summary_msg}"
+                )
+            else:
+                result["summary"] = {"error": "No phone number configured for summary messages"}
+
+        elif request.type == "recovery":
+            recovery_msg = whatsapp_service.format_recovery_message(mock_site_data, mock_event_data)
+            results_complete = None
+            results_summary = None
+
+            if whatsapp_service.phone_complete:
+                results_complete = await whatsapp_service.send_message(
+                    whatsapp_service.phone_complete,
+                    f"🧪 TEST MESSAGE\n\n{recovery_msg}"
+                )
+
+            if whatsapp_service.phone_summary:
+                results_summary = await whatsapp_service.send_message(
+                    whatsapp_service.phone_summary,
+                    f"🧪 TEST MESSAGE\n\n{recovery_msg}"
+                )
+
+            result = {
+                "complete": results_complete,
+                "summary": results_summary
+            }
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid type: {request.type}. Must be 'complete', 'summary', or 'recovery'"
+            )
+
+        return {
+            "success": True,
+            "message": f"Test {request.type} notification sent",
+            "type": request.type,
+            "results": result,
+            "whatsapp_enabled": whatsapp_service.enabled,
+            "phones_configured": {
+                "complete": bool(whatsapp_service.phone_complete),
+                "summary": bool(whatsapp_service.phone_summary)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error testing notification: {str(e)}")
 
 
 @router.get("/sites", response_model=List[Dict[str, Any]])
@@ -440,6 +676,231 @@ async def delete_event(event_id: int) -> EventResponse:
         raise HTTPException(status_code=500, detail=f"Error deleting event: {str(e)}")
 
 
+# ============== Post-Mortem Endpoints ==============
+
+@router.post("/post-mortems")
+async def create_post_mortem(request: CreatePostMortemRequest) -> Dict[str, Any]:
+    """
+    Create a new post-mortem for an incident.
+    """
+    try:
+        post_mortem = pm_service.create_post_mortem(
+            alert_event_id=request.alert_event_id,
+            data=request.dict(exclude_none=True)
+        )
+
+        return {
+            "success": True,
+            "message": "Post-mortem created successfully",
+            "post_mortem": post_mortem
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating post-mortem: {str(e)}")
+
+
+@router.get("/post-mortems")
+async def list_post_mortems(
+        status: Optional[str] = Query(None, description="Filter by status (draft, in_progress, completed, reviewed)"),
+        limit: int = Query(100, ge=1, le=1000)
+) -> List[Dict[str, Any]]:
+    """
+    List all post-mortems with optional filters.
+    """
+    try:
+        post_mortems = pm_service.list_post_mortems(status=status, limit=limit)
+
+        return post_mortems
+
+    except Exception as e:
+        logger.error(f"Error listing post-mortems: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error listing post-mortems: {str(e)}")
+
+
+@router.get("/post-mortems/{pm_id}")
+async def get_post_mortem(pm_id: int) -> Dict[str, Any]:
+    """
+    Get detailed post-mortem by ID.
+    """
+    try:
+        post_mortem = pm_service.get_post_mortem(pm_id)
+
+        if not post_mortem:
+            raise HTTPException(status_code=404, detail=f"Post-mortem {pm_id} not found")
+
+        return post_mortem
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting post-mortem: {str(e)}")
+
+
+@router.put("/post-mortems/{pm_id}")
+async def update_post_mortem(pm_id: int, request: UpdatePostMortemRequest) -> Dict[str, Any]:
+    """
+    Update post-mortem data.
+    """
+    try:
+        post_mortem = pm_service.update_post_mortem(
+            pm_id=pm_id,
+            data=request.dict(exclude_none=True)
+        )
+
+        return {
+            "success": True,
+            "message": "Post-mortem updated successfully",
+            "post_mortem": post_mortem
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating post-mortem: {str(e)}")
+
+
+@router.post("/post-mortems/{pm_id}/complete")
+async def complete_post_mortem(pm_id: int) -> Dict[str, Any]:
+    """
+    Mark post-mortem as completed.
+    """
+    try:
+        post_mortem = pm_service.complete_post_mortem(pm_id)
+
+        return {
+            "success": True,
+            "message": "Post-mortem marked as completed",
+            "post_mortem": post_mortem
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error completing post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error completing post-mortem: {str(e)}")
+
+
+@router.post("/post-mortems/{pm_id}/review")
+async def review_post_mortem(pm_id: int) -> Dict[str, Any]:
+    """
+    Mark post-mortem as reviewed.
+    """
+    try:
+        post_mortem = pm_service.review_post_mortem(pm_id)
+
+        return {
+            "success": True,
+            "message": "Post-mortem marked as reviewed",
+            "post_mortem": post_mortem
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error reviewing post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error reviewing post-mortem: {str(e)}")
+
+
+@router.get("/post-mortems/{pm_id}/report")
+async def get_post_mortem_report(pm_id: int) -> Dict[str, Any]:
+    """
+    Generate comprehensive post-mortem report with metrics.
+    """
+    try:
+        report = pm_service.generate_report(pm_id)
+
+        return report
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error generating report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+
+
+@router.delete("/post-mortems/{pm_id}")
+async def delete_post_mortem(pm_id: int) -> Dict[str, Any]:
+    """
+    Delete a post-mortem permanently.
+    """
+    try:
+        pm_service.delete_post_mortem(pm_id)
+
+        return {
+            "success": True,
+            "message": f"Post-mortem {pm_id} deleted successfully"
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting post-mortem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting post-mortem: {str(e)}")
+
+
+# ============== Polling Control Endpoints ==============
+
+@router.post("/polling/start")
+async def start_polling() -> Dict[str, Any]:
+    """
+    Start automatic site scanning with WhatsApp alerts.
+    """
+    try:
+        if not polling_service:
+            raise HTTPException(status_code=503, detail="Polling service not initialized")
+
+        result = await polling_service.start_polling()
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error starting polling: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error starting polling: {str(e)}")
+
+
+@router.post("/polling/stop")
+async def stop_polling() -> Dict[str, Any]:
+    """
+    Stop automatic site scanning.
+    """
+    try:
+        if not polling_service:
+            raise HTTPException(status_code=503, detail="Polling service not initialized")
+
+        result = await polling_service.stop_polling()
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error stopping polling: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error stopping polling: {str(e)}")
+
+
+@router.get("/polling/status")
+async def get_polling_status() -> Dict[str, Any]:
+    """
+    Get current polling status and last scan results.
+    """
+    try:
+        if not polling_service:
+            return {
+                "is_running": False,
+                "enabled": False,
+                "error": "Polling service not initialized"
+            }
+
+        return polling_service.get_status()
+
+    except Exception as e:
+        logger.error(f"Error getting polling status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting polling status: {str(e)}")
+
+
 # ============== Health Check ==============
 
 @router.get("/health")
@@ -450,5 +911,7 @@ async def health_check() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "service": "alerting",
-        "unms_configured": bool(UISP_BASE_URL and UISP_TOKEN)
+        "unms_configured": bool(UISP_BASE_URL and UISP_TOKEN),
+        "whatsapp_enabled": whatsapp_service.enabled,
+        "polling_running": polling_service.is_running if polling_service else False
     }

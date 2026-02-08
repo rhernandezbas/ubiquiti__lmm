@@ -100,6 +100,10 @@ class AlertEvent(Base):
     site_id = Column(BigInteger, ForeignKey('site_monitoring.id'), nullable=True, index=True)
     site = relationship("SiteMonitoring", back_populates="alerts")
 
+    # Relationships with notifications and post-mortem
+    notifications = relationship("AlertNotification", back_populates="alert_event", cascade="all, delete-orphan")
+    post_mortem = relationship("PostMortem", back_populates="alert_event", uselist=False, cascade="all, delete-orphan")
+
     # Additional data
     device_count = Column(Integer)
     outage_count = Column(Integer)

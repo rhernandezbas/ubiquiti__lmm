@@ -15,6 +15,10 @@ class AnalyzeStationsServices:
         self.uisp_service = uisp_service
         self.ssh_service = ssh_service
 
+    @staticmethod
+    def safe_value(val, default=0):
+        """Helper to safely convert None to a default value for math operations."""
+        return val if val is not None else default
 
     async def match_device_data(self, ip: str = None, mac: str = None) -> dict:
         """ Identifica el dispositivo por IP o MAC """
@@ -67,13 +71,14 @@ class AnalyzeStationsServices:
         
         # Información de capacidad y rendimiento
         overview = device_data.get("overview", {})
+
         capacity_info = {
-            "downlink_capacity_mbps": overview.get("downlinkCapacity", 0) / 1000000,  # Convertir a Mbps
-            "uplink_capacity_mbps": overview.get("uplinkCapacity", 0) / 1000000,
-            "total_capacity_mbps": overview.get("totalCapacity", 0) / 1000000,
-            "downlink_utilization_percent": overview.get("downlinkUtilization", 0) * 100,
-            "uplink_utilization_percent": overview.get("uplinkUtilization", 0) * 100,
-            "theoretical_total_capacity_mbps": overview.get("theoreticalTotalCapacity", 0) / 1000000
+            "downlink_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("downlinkCapacity")) / 1000000,  # Convertir a Mbps
+            "uplink_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("uplinkCapacity")) / 1000000,
+            "total_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("totalCapacity")) / 1000000,
+            "downlink_utilization_percent": AnalyzeStationsServices.safe_value(overview.get("downlinkUtilization")) * 100,
+            "uplink_utilization_percent": AnalyzeStationsServices.safe_value(overview.get("uplinkUtilization")) * 100,
+            "theoretical_total_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("theoreticalTotalCapacity")) / 1000000
         }
         
         # Información de señal y conexión
@@ -88,11 +93,12 @@ class AnalyzeStationsServices:
         }
         
         # Información del sistema
+        uptime = overview.get("uptime")
         system_info = {
             "cpu_usage_percent": overview.get("cpu", "N/A"),
             "ram_usage_percent": overview.get("ram", "N/A"),
-            "uptime_seconds": overview.get("uptime", "N/A"),
-            "uptime_days": overview.get("uptime", 0) / 86400 if overview.get("uptime") else "N/A",  # Convertir a días
+            "uptime_seconds": uptime if uptime is not None else "N/A",
+            "uptime_days": round(uptime / 86400, 2) if uptime else "N/A",  # Convertir a días
             "mode": device_data.get("mode", "N/A")
         }
         
@@ -339,11 +345,11 @@ class AnalyzeStationsServices:
                     "site_name": ap_complete_data.get("identification", {}).get("site", {}).get("name", "N/A")
                 },
                 "capacity": {
-                    "downlink_capacity_mbps": overview.get("downlinkCapacity", 0) / 1000000,
-                    "uplink_capacity_mbps": overview.get("uplinkCapacity", 0) / 1000000,
-                    "total_capacity_mbps": overview.get("totalCapacity", 0) / 1000000,
-                    "downlink_utilization_percent": overview.get("downlinkUtilization", 0) * 100,
-                    "uplink_utilization_percent": overview.get("uplinkUtilization", 0) * 100
+                    "downlink_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("downlinkCapacity")) / 1000000,
+                    "uplink_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("uplinkCapacity")) / 1000000,
+                    "total_capacity_mbps": AnalyzeStationsServices.safe_value(overview.get("totalCapacity")) / 1000000,
+                    "downlink_utilization_percent": AnalyzeStationsServices.safe_value(overview.get("downlinkUtilization")) * 100,
+                    "uplink_utilization_percent": AnalyzeStationsServices.safe_value(overview.get("uplinkUtilization")) * 100
                 },
                 "clients": {
                     "total_clients": overview.get("stationsCount", 0),

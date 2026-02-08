@@ -266,6 +266,162 @@ class UNMSAlertingService:
             logger.error(f"Error scanning sites: {str(e)}")
             raise
 
+    async def check_uisp_availability(self) -> bool:
+        """
+        Check if UISP API is available and responding.
+
+        Returns:
+            True if UISP is available, False otherwise
+        """
+        try:
+            response = await self.session.get('/nms/api/v2.1/sites', timeout=5.0)
+            response.raise_for_status()
+            logger.info("✅ UISP API is available")
+            return True
+        except httpx.TimeoutException:
+            logger.error("❌ UISP API timeout - service may be down")
+            return False
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ UISP API returned error: {e.response.status_code}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ UISP API unavailable: {e}")
+            return False
+
+    async def scan_and_alert_sites_with_whatsapp(self, whatsapp_service) -> Dict[str, Any]:
+        """
+        Scan all sites and send WhatsApp alerts for outages/recoveries.
+        ONLY sends alerts if UISP is available to avoid false positives.
+
+        Args:
+            whatsapp_service: WhatsAppService instance
+
+        Returns:
+            Summary of scan results including notifications sent
+        """
+        try:
+            # CRITICAL: Check UISP availability first
+            uisp_available = await self.check_uisp_availability()
+            if not uisp_available:
+                logger.error("⛔ UISP not available - skipping alerts to prevent false positives")
+                return {
+                    'success': False,
+                    'error': 'UISP unavailable',
+                    'uisp_available': False,
+                    'notifications_sent': 0
+                }
+
+            logger.info("✅ UISP available - proceeding with scan")
+
+            # Get all sites
+            sites_data = await self.get_all_sites()
+            if not sites_data:
+                logger.warning("No sites retrieved from UNMS")
+                return {
+                    'success': False,
+                    'error': 'No sites data',
+                    'uisp_available': True,
+                    'total_sites': 0
+                }
+
+            total_sites = len(sites_data)
+            sites_down = 0
+            sites_recovered = 0
+            notifications_sent = 0
+            notification_failures = 0
+
+            for site_data in sites_data:
+                try:
+                    # Process site and save to DB
+                    site = await self.process_site_data(site_data)
+
+                    # Check if we need to create/resolve events
+                    event = await self.check_and_create_outage_event(site)
+
+                    # If new outage event created, send WhatsApp alerts
+                    if event and event.status == AlertStatus.ACTIVE:
+                        if event.event_type == EventType.SITE_OUTAGE:
+                            logger.info(f"🚨 Sending outage alerts for {site.site_name}")
+
+                            # Prepare event data for notification
+                            event_data = {
+                                'detected_at': event.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                            }
+
+                            # Send WhatsApp notifications
+                            results = await whatsapp_service.send_outage_alert(site_data, event_data)
+
+                            # Track notification results
+                            if results.get('complete', {}).get('success'):
+                                notifications_sent += 1
+                            else:
+                                notification_failures += 1
+
+                            if results.get('summary', {}).get('success'):
+                                notifications_sent += 1
+                            else:
+                                notification_failures += 1
+
+                            sites_down += 1
+
+                    # Check for recoveries
+                    if not site.is_site_down and site.outage_percentage < 50.0:
+                        # Check if there were active events that got resolved
+                        recently_resolved = self.event_repo.get_events_by_site(site.id)
+                        for resolved_event in recently_resolved:
+                            if resolved_event.status == AlertStatus.RESOLVED and resolved_event.auto_resolved:
+                                # Check if it was recently resolved (within last minute)
+                                if resolved_event.resolved_at:
+                                    time_since_resolution = (datetime.now() - resolved_event.resolved_at).total_seconds()
+                                    if time_since_resolution < 60:  # Resolved in last minute
+                                        logger.info(f"✅ Sending recovery alerts for {site.site_name}")
+
+                                        downtime_minutes = 0
+                                        if resolved_event.created_at and resolved_event.resolved_at:
+                                            downtime_minutes = int((resolved_event.resolved_at - resolved_event.created_at).total_seconds() / 60)
+
+                                        recovery_event_data = {
+                                            'recovered_at': resolved_event.resolved_at.strftime('%H:%M:%S'),
+                                            'downtime_minutes': downtime_minutes
+                                        }
+
+                                        # Send recovery notifications
+                                        recovery_results = await whatsapp_service.send_recovery_alert(site_data, recovery_event_data)
+
+                                        if recovery_results.get('complete', {}).get('success'):
+                                            notifications_sent += 1
+
+                                        if recovery_results.get('summary', {}).get('success'):
+                                            notifications_sent += 1
+
+                                        sites_recovered += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing site {site_data.get('identification', {}).get('name', 'unknown')}: {str(e)}")
+                    continue
+
+            summary = {
+                'success': True,
+                'uisp_available': True,
+                'total_sites': total_sites,
+                'sites_down': sites_down,
+                'sites_recovered': sites_recovered,
+                'notifications_sent': notifications_sent,
+                'notification_failures': notification_failures,
+                'scan_timestamp': datetime.now().isoformat()
+            }
+
+            logger.info(f"✅ Site scan with alerts completed: {summary}")
+            return summary
+
+        except Exception as e:
+            logger.error(f"❌ Error scanning sites with WhatsApp alerts: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'uisp_available': uisp_available if 'uisp_available' in locals() else None
+            }
+
 
 class AlertEventService:
     """Service for managing alert events."""

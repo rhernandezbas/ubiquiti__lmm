@@ -51,7 +51,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         logger.info("Starting Ubiquiti LLM Service")
-        
+
         # Inicializar base de datos
         try:
             from app_fast_api.utils.database import init_db
@@ -61,10 +61,45 @@ def create_app() -> FastAPI:
             logger.error(f"Failed to initialize database: {str(e)}")
             # No fallar la aplicación si la BD no está disponible
             logger.warning("Application will continue without database functionality")
+
+        # Iniciar polling automático si está habilitado
+        try:
+            import os
+            from app_fast_api.services.polling_service import get_polling_service
+
+            polling_enabled = os.getenv('POLLING_ENABLED', 'false').lower() == 'true'
+
+            if polling_enabled:
+                polling_service = get_polling_service()
+                if polling_service:
+                    logger.info("🔄 Auto-starting polling service...")
+                    await polling_service.start_polling()
+                    logger.info("✅ Polling service started automatically")
+                else:
+                    logger.warning("Polling service not initialized")
+            else:
+                logger.info("⏸️  Polling disabled (POLLING_ENABLED=false)")
+
+        except Exception as e:
+            logger.error(f"Failed to start polling service: {str(e)}")
+            logger.warning("Application will continue without polling")
     
     @app.on_event("shutdown")
     async def shutdown_event():
         logger.info("Shutting down Ubiquiti LLM Service")
+
+        # Detener polling si está corriendo
+        try:
+            from app_fast_api.services.polling_service import get_polling_service
+
+            polling_service = get_polling_service()
+            if polling_service and polling_service.is_running:
+                logger.info("🛑 Stopping polling service...")
+                await polling_service.stop_polling()
+                logger.info("✅ Polling service stopped")
+
+        except Exception as e:
+            logger.error(f"Error stopping polling service: {str(e)}")
     
     @app.get("/health")
     async def health_check():
