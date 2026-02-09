@@ -716,8 +716,16 @@ async def send_event_notification(
         if not event:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
 
-        # Get site data
-        site = site_repo.get_site_by_id(event.site_id) if event.site_id else None
+        # Get site data (event.site_id is the numeric DB id, not the UUID)
+        from app_fast_api.utils.database import SessionLocal
+        from app_fast_api.models.ubiquiti_monitoring.alerting import SiteMonitoring as SiteModel
+
+        db = SessionLocal()
+        try:
+            site = db.query(SiteModel).filter_by(id=event.site_id).first() if event.site_id else None
+        finally:
+            db.close()
+
         if not site:
             raise HTTPException(status_code=404, detail=f"Site for event {event_id} not found")
 
