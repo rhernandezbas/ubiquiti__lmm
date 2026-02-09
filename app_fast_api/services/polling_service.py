@@ -10,6 +10,7 @@ from datetime import datetime
 from app_fast_api.services.alerting_services import UNMSAlertingService
 from app_fast_api.services.whatsapp_service import WhatsAppService
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import now_argentina
 
 logger = get_logger(__name__)
 
@@ -133,7 +134,7 @@ class SiteMonitoringPollingService:
                     self.whatsapp_service
                 )
 
-                self.last_scan_time = datetime.now()
+                self.last_scan_time = now_argentina()
                 self.last_scan_result = result
 
                 if result.get('success'):
@@ -176,7 +177,7 @@ class SiteMonitoringPollingService:
                 self.whatsapp_service
             )
 
-            self.last_scan_time = datetime.now()
+            self.last_scan_time = now_argentina()
             self.last_scan_result = result
 
             return result

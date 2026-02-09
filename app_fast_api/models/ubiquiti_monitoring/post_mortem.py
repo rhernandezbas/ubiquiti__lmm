@@ -8,6 +8,7 @@ from datetime import datetime
 import enum
 
 from app_fast_api.utils.database import Base
+from app_fast_api.utils.timezone import now_argentina
 
 
 class NotificationStatus(str, enum.Enum):
@@ -70,8 +71,8 @@ class AlertNotification(Base):
     notification_metadata = Column(JSON, default=dict)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, default=now_argentina, nullable=False, index=True)
+    updated_at = Column(DateTime, default=now_argentina, onupdate=now_argentina)
 
     def __repr__(self):
         return f"<AlertNotification(id={self.id}, channel={self.channel}, status={self.status}, recipient={self.recipient})>"
@@ -148,8 +149,8 @@ class PostMortem(Base):
     external_links = Column(JSON, default=list)  # Links a docs, tickets, etc.
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, default=now_argentina, nullable=False, index=True)
+    updated_at = Column(DateTime, default=now_argentina, onupdate=now_argentina)
     completed_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
 

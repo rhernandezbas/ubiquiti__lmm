@@ -288,8 +288,8 @@ Horarios permitidos: 24h / 365 días"""
         }
 
         mock_event_data = {
-            "detected_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            "recovered_at": datetime.now().strftime('%H:%M:%S'),
+            "detected_at": now_argentina().strftime('%Y-%m-%d %H:%M:%S'),
+            "recovered_at": now_argentina().strftime('%H:%M:%S'),
             "downtime_minutes": 155
         }
 

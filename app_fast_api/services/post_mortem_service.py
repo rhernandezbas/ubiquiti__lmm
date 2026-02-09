@@ -9,7 +9,7 @@ import json
 from app_fast_api.repositories.alerting_repositories import PostMortemRepository, AlertEventRepository
 from app_fast_api.models.ubiquiti_monitoring.post_mortem import PostMortemStatus
 from app_fast_api.utils.logger import get_logger
-from app_fast_api.utils.timezone import to_argentina_isoformat
+from app_fast_api.utils.timezone import to_argentina_isoformat, now_argentina
 
 logger = get_logger(__name__)
 
@@ -76,13 +76,13 @@ class PostMortemService:
             'tags': json.dumps(data.get('tags', [])),
             'related_incidents': json.dumps(data.get('related_incidents', [])),
             'external_links': json.dumps(data.get('external_links', [])),
-            'created_at': datetime.now(),
-            'updated_at': datetime.now()
+            'created_at': now_argentina(),
+            'updated_at': now_argentina()
         }
 
         # Set timestamps (not durations)
         # detection_time: When the incident was detected (required field)
-        pm_data['detection_time'] = event.created_at or datetime.now()
+        pm_data['detection_time'] = event.created_at or now_argentina()
 
         # response_time: When response started (acknowledged timestamp)
         pm_data['response_time'] = event.acknowledged_at  # Can be None
@@ -293,7 +293,7 @@ class PostMortemService:
         return {
             'post_mortem': pm_data,
             'metrics': metrics,
-            'generated_at': datetime.now().isoformat()
+            'generated_at': now_argentina().isoformat()
         }
 
     def _serialize_post_mortem(self, pm) -> Dict[str, Any]:

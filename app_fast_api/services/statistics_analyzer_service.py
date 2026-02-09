@@ -5,6 +5,7 @@ Service for analyzing UISP device statistics timeseries data
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import now_argentina
 
 logger = get_logger(__name__)
 
@@ -255,7 +256,7 @@ class StatisticsAnalyzerService:
             "total_outage_points": len(outages),
             "outage_periods": len(outage_periods),
             "outage_details": outage_periods[:5],  # Last 5 periods
-            "has_recent_outage": len(outages) > 0 and (datetime.now().timestamp() * 1000 - outages[-1]["timestamp"]) < 3600000  # Within 1 hour
+            "has_recent_outage": len(outages) > 0 and (now_argentina().timestamp() * 1000 - outages[-1]["timestamp"]) < 3600000  # Within 1 hour
         }
 
     @staticmethod
@@ -381,5 +382,5 @@ class StatisticsAnalyzerService:
             "signal_analysis": StatisticsAnalyzerService.analyze_signal_timeseries(statistics),
             "outage_analysis": StatisticsAnalyzerService.analyze_outages(statistics),
             "capacity_analysis": StatisticsAnalyzerService.analyze_capacity_timeseries(statistics),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": now_argentina().isoformat()
         }

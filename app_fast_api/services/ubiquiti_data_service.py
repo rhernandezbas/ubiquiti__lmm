@@ -1,6 +1,7 @@
 """Service for managing Ubiquiti monitoring data persistence."""
 
 from datetime import datetime
+from app_fast_api.utils.timezone import now_argentina
 from typing import List, Optional, Dict, Any
 
 from app_fast_api.repositories.ubiquiti_repositories import DeviceAnalysisRepository, ScanResultRepository, FrequencyChangeRepository
@@ -65,7 +66,7 @@ class UbiquitiDataService:
             'llm_summary': llm_analysis.get('summary'),
             'llm_recommendations': json.dumps(llm_analysis.get('recommendations', [])),
             'llm_diagnosis': llm_analysis.get('diagnosis') or 'No diagnosis provided',
-            'analysis_date': datetime.now(),
+            'analysis_date': now_argentina(),
             'needs_frequency_enable': llm_analysis.get('needs_frequency_enable', False),
             'next_action': llm_analysis.get('next_action') or 'no_action',
             'complete_data_json': json.dumps(complete_data)
@@ -92,7 +93,7 @@ class UbiquitiDataService:
                 'ap_ip': ap.get('ap_ip'),
                 'ap_site': ap.get('ap_site'),
                 'current_clients': ap.get('current_clients'),
-                'scan_date': datetime.now()
+                'scan_date': now_argentina()
             }
             self.scan_result_repo.create_scan_result(scan_data)
         
@@ -121,7 +122,7 @@ class UbiquitiDataService:
             'ssh_username': ssh_username,
             'ssh_result': ssh_result,
             'ssh_error': ssh_error,
-            'operation_date': datetime.now(),
+            'operation_date': now_argentina(),
             'triggered_by': 'system'
         }
         

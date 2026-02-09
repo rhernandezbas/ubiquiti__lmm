@@ -99,7 +99,7 @@ class UNMSAlertingService:
                 return None
 
             # Calculate initial timeline event
-            incident_time = event.created_at or datetime.now()
+            incident_time = event.created_at or now_argentina()
 
             # Pre-fill Post-Mortem data
             pm_data = {
@@ -195,15 +195,15 @@ class UNMSAlertingService:
                 'ip_addresses': json.dumps(description.get('ipAddresses', [])),
                 'regulatory_domain': description.get('regulatoryDomain'),
                 'suspended': identification.get('suspended', False),
-                'last_checked': datetime.now(),
-                'last_updated': datetime.fromisoformat(identification.get('updated').replace('Z', '+00:00')) if identification.get('updated') else datetime.now(),
-                'created_at': datetime.now()
+                'last_checked': now_argentina(),
+                'last_updated': datetime.fromisoformat(identification.get('updated').replace('Z', '+00:00')) if identification.get('updated') else now_argentina(),
+                'created_at': now_argentina()
             }
 
             # Handle outage_start based on state change
             if not previous_is_down and is_down:
                 # Site just went down - record outage start time
-                site_monitoring_data['outage_start'] = datetime.now()
+                site_monitoring_data['outage_start'] = now_argentina()
                 logger.warning(f"🔴 Site {site_monitoring_data['site_name']} went DOWN - recording outage_start")
             elif previous_is_down and not is_down:
                 # Site recovered - clear outage start time
@@ -254,8 +254,8 @@ class UNMSAlertingService:
                         'device_count': site.device_count,
                         'outage_count': site.device_outage_count,
                         'outage_percentage': site.outage_percentage,
-                        'created_at': datetime.now(),
-                        'updated_at': datetime.now()
+                        'created_at': now_argentina(),
+                        'updated_at': now_argentina()
                     }
                     event = self.event_repo.create_event(event_data)
                     logger.critical(f"CRITICAL ALERT: {event.title}")
@@ -278,8 +278,8 @@ class UNMSAlertingService:
                         'device_count': site.device_count,
                         'outage_count': site.device_outage_count,
                         'outage_percentage': site.outage_percentage,
-                        'created_at': datetime.now(),
-                        'updated_at': datetime.now()
+                        'created_at': now_argentina(),
+                        'updated_at': now_argentina()
                     }
                     event = self.event_repo.create_event(event_data)
                     logger.warning(f"HIGH ALERT: {event.title}")
@@ -349,7 +349,7 @@ class UNMSAlertingService:
                 'sites_degraded': sites_degraded,
                 'sites_healthy': total_sites - sites_down - sites_degraded,
                 'new_events_created': new_events,
-                'scan_timestamp': datetime.now().isoformat()
+                'scan_timestamp': now_argentina().isoformat()
             }
 
             logger.info(f"Site scan completed: {summary}")
@@ -465,7 +465,7 @@ class UNMSAlertingService:
                             if resolved_event.status == AlertStatus.RESOLVED and resolved_event.auto_resolved:
                                 # Check if it was recently resolved (within last minute)
                                 if resolved_event.resolved_at:
-                                    time_since_resolution = (datetime.now() - resolved_event.resolved_at).total_seconds()
+                                    time_since_resolution = (now_argentina() - resolved_event.resolved_at).total_seconds()
                                     if time_since_resolution < 60:  # Resolved in last minute
                                         logger.info(f"✅ Sending recovery alerts for {site.site_name}")
 
@@ -501,7 +501,7 @@ class UNMSAlertingService:
                 'sites_recovered': sites_recovered,
                 'notifications_sent': notifications_sent,
                 'notification_failures': notification_failures,
-                'scan_timestamp': datetime.now().isoformat()
+                'scan_timestamp': now_argentina().isoformat()
             }
 
             logger.info(f"✅ Site scan with alerts completed: {summary}")
@@ -525,8 +525,8 @@ class AlertEventService:
 
     def create_custom_event(self, event_data: dict) -> AlertEvent:
         """Create a custom alert event."""
-        event_data['created_at'] = datetime.now()
-        event_data['updated_at'] = datetime.now()
+        event_data['created_at'] = now_argentina()
+        event_data['updated_at'] = now_argentina()
         return self.event_repo.create_event(event_data)
 
     def get_event(self, event_id: int) -> Optional[AlertEvent]:
