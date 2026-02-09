@@ -41,10 +41,10 @@ class AlertNotification(Base):
     """
     __tablename__ = 'alert_notifications'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
 
     # Relación con el evento
-    alert_event_id = Column(Integer, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, index=True)
+    alert_event_id = Column(BigInteger, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, index=True)
     alert_event = relationship("AlertEvent", back_populates="notifications")
 
     # Información de la notificación
@@ -84,10 +84,10 @@ class PostMortem(Base):
     """
     __tablename__ = 'post_mortems'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
 
     # Relación con el evento
-    alert_event_id = Column(Integer, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    alert_event_id = Column(BigInteger, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     alert_event = relationship("AlertEvent", back_populates="post_mortem")
 
     # Información del incidente
