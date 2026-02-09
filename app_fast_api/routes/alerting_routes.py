@@ -680,11 +680,19 @@ async def delete_event(event_id: int) -> EventResponse:
 
 
 @router.post("/events/{event_id}/notify", response_model=Dict[str, Any])
-async def send_event_notification(event_id: int) -> Dict[str, Any]:
+async def send_event_notification(
+    event_id: int,
+    message_type: Optional[str] = Query(None, description="Message type: 'complete', 'summary', or 'both' (default)")
+) -> Dict[str, Any]:
     """
     Send WhatsApp notification for a specific event.
 
-    Sends alerts to both configured phone numbers (complete and summary).
+    Args:
+        event_id: Event ID to send notification for
+        message_type: Optional - 'complete' (detailed), 'summary' (brief), or 'both' (default)
+
+    By default sends both messages. Use message_type to send only one.
+
     Useful for:
     - Resending failed notifications
     - Manually notifying events
@@ -692,8 +700,14 @@ async def send_event_notification(event_id: int) -> Dict[str, Any]:
 
     Examples:
         ```bash
-        # Send notification for event ID 5
+        # Send both messages (default)
         curl -X POST http://190.7.234.37:7657/api/v1/alerting/events/5/notify
+
+        # Send only complete message
+        curl -X POST "http://190.7.234.37:7657/api/v1/alerting/events/5/notify?message_type=complete"
+
+        # Send only summary message
+        curl -X POST "http://190.7.234.37:7657/api/v1/alerting/events/5/notify?message_type=summary"
         ```
     """
     try:
@@ -746,7 +760,15 @@ async def send_event_notification(event_id: int) -> Dict[str, Any]:
             "detected_at": event.created_at.strftime('%Y-%m-%d %H:%M:%S') if event.created_at else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
-        # Send appropriate notifications based on event type
+        # Normalize message_type
+        if not message_type:
+            message_type = "both"
+        message_type = message_type.lower()
+
+        if message_type not in ["complete", "summary", "both"]:
+            raise HTTPException(status_code=400, detail="message_type must be 'complete', 'summary', or 'both'")
+
+        # Send appropriate notifications based on event type and message_type
         results = {}
 
         if event.status == AlertStatus.RESOLVED:
@@ -761,11 +783,39 @@ async def send_event_notification(event_id: int) -> Dict[str, Any]:
                 "downtime_minutes": downtime_minutes
             }
 
-            results = await whatsapp_service.send_recovery_alert(site_data, recovery_event_data)
+            # Format recovery message
+            recovery_msg = whatsapp_service.format_recovery_message(site_data, recovery_event_data)
+
+            # Send based on message_type
+            if message_type in ["complete", "both"] and whatsapp_service.phone_complete:
+                results["complete"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_complete,
+                    recovery_msg
+                )
+
+            if message_type in ["summary", "both"] and whatsapp_service.phone_summary:
+                results["summary"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_summary,
+                    recovery_msg
+                )
 
         else:
             # Send outage notification
-            results = await whatsapp_service.send_outage_alert(site_data, event_data)
+            complete_msg = whatsapp_service.format_complete_message(site_data, event_data)
+            summary_msg = whatsapp_service.format_summary_message(site_data, event_data)
+
+            # Send based on message_type
+            if message_type in ["complete", "both"] and whatsapp_service.phone_complete:
+                results["complete"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_complete,
+                    complete_msg
+                )
+
+            if message_type in ["summary", "both"] and whatsapp_service.phone_summary:
+                results["summary"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_summary,
+                    summary_msg
+                )
 
         # Count successes
         notifications_sent = 0
