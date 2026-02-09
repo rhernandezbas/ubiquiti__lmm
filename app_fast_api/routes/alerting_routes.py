@@ -32,12 +32,14 @@ UISP_TOKEN = os.getenv("UISP_TOKEN", "")
 
 site_repo = SiteMonitoringRepository()
 event_repo = AlertEventRepository()
+pm_repo = PostMortemRepository()
 
 unms_service = UNMSAlertingService(
     base_url=UISP_BASE_URL,
     token=UISP_TOKEN,
     site_repo=site_repo,
     event_repo=event_repo,
+    pm_repo=pm_repo,
     outage_threshold=95.0  # Default 95%
 )
 
@@ -46,7 +48,6 @@ event_service = AlertEventService(event_repo=event_repo)
 whatsapp_service = WhatsAppService()
 
 # Initialize post-mortem service
-pm_repo = PostMortemRepository()
 pm_service = PostMortemService(pm_repo=pm_repo, event_repo=event_repo)
 
 # Initialize notification repository

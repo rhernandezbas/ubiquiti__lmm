@@ -8,8 +8,9 @@ from datetime import datetime
 from app_fast_api.models.ubiquiti_monitoring.alerting import (
     SiteMonitoring, AlertEvent, AlertSeverity, AlertStatus, EventType
 )
+from app_fast_api.models.ubiquiti_monitoring.post_mortem import PostMortemStatus
 from app_fast_api.repositories.alerting_repositories import (
-    SiteMonitoringRepository, AlertEventRepository
+    SiteMonitoringRepository, AlertEventRepository, PostMortemRepository
 )
 from app_fast_api.utils.logger import get_logger
 
@@ -22,6 +23,7 @@ class UNMSAlertingService:
     def __init__(self, base_url: str, token: str,
                  site_repo: SiteMonitoringRepository,
                  event_repo: AlertEventRepository,
+                 pm_repo: PostMortemRepository,
                  outage_threshold: float = 95.0):
         """
         Initialize UNMS alerting service.
@@ -31,12 +33,14 @@ class UNMSAlertingService:
             token: UNMS authentication token
             site_repo: Site monitoring repository
             event_repo: Alert event repository
+            pm_repo: Post-mortem repository
             outage_threshold: Percentage threshold to consider site as down (default: 95%)
         """
         self.base_url = base_url.rstrip('/')
         self.token = token
         self.site_repo = site_repo
         self.event_repo = event_repo
+        self.pm_repo = pm_repo
         self.outage_threshold = outage_threshold
 
         self.session = httpx.AsyncClient(
@@ -74,6 +78,74 @@ class UNMSAlertingService:
     def is_site_down(self, outage_percentage: float) -> bool:
         """Determine if site is down based on outage threshold."""
         return outage_percentage >= self.outage_threshold
+
+    def create_post_mortem_for_event(self, event: AlertEvent, site: SiteMonitoring) -> Optional[Any]:
+        """
+        Auto-create a Post-Mortem when a critical site outage is detected.
+
+        Args:
+            event: The AlertEvent that triggered the incident
+            site: The SiteMonitoring object with site details
+
+        Returns:
+            PostMortem object if created, None if already exists
+        """
+        try:
+            # Check if Post-Mortem already exists for this event
+            existing_pm = self.pm_repo.get_post_mortem_by_event(event.id)
+            if existing_pm:
+                logger.info(f"Post-Mortem already exists for event {event.id}")
+                return None
+
+            # Calculate initial timeline event
+            incident_time = event.created_at or datetime.now()
+
+            # Pre-fill Post-Mortem data
+            pm_data = {
+                'alert_event_id': event.id,
+                'title': f'Incidente: {site.site_name}',
+                'status': PostMortemStatus.IN_PROGRESS,
+                'incident_start': incident_time,
+                'detection_time': incident_time,
+                'summary': f'Caída detectada en sitio {site.site_name}. {site.device_outage_count} de {site.device_count} dispositivos fuera de servicio ({site.outage_percentage:.1f}%).',
+                'impact_description': f'Sitio completamente caído o severamente degradado. Impacto en servicios de red.',
+                'affected_devices': site.device_outage_count,
+                'severity': event.severity.value,
+                'customer_impact': 'total' if site.is_site_down else 'partial',
+                'timeline_events': [
+                    {
+                        'time': incident_time.isoformat(),
+                        'event': f'Caída detectada: {site.device_outage_count}/{site.device_count} dispositivos down',
+                        'actor': 'Sistema de Monitoreo',
+                        'type': 'detection'
+                    }
+                ],
+                'tags': [
+                    'site_outage',
+                    site.site_name,
+                    f'severity_{event.severity.value}'
+                ]
+            }
+
+            # Add contact information if available
+            if site.contact_name or site.contact_phone:
+                pm_data['external_links'] = []
+                if site.contact_name:
+                    pm_data['external_links'].append({
+                        'type': 'contact',
+                        'name': site.contact_name,
+                        'phone': site.contact_phone,
+                        'email': site.contact_email
+                    })
+
+            post_mortem = self.pm_repo.create_post_mortem(pm_data)
+            logger.info(f"✅ Auto-created Post-Mortem {post_mortem.id} for event {event.id} - {site.site_name}")
+            return post_mortem
+
+        except Exception as e:
+            logger.error(f"Error creating Post-Mortem for event {event.id}: {str(e)}")
+            # Don't raise - Post-Mortem creation shouldn't block alerting
+            return None
 
     async def process_site_data(self, site_data: dict) -> SiteMonitoring:
         """
@@ -170,6 +242,10 @@ class UNMSAlertingService:
                     }
                     event = self.event_repo.create_event(event_data)
                     logger.critical(f"CRITICAL ALERT: {event.title}")
+
+                    # Auto-create Post-Mortem for critical site outages
+                    self.create_post_mortem_for_event(event, site)
+
                     return event
 
             elif site.outage_percentage >= 50.0:
