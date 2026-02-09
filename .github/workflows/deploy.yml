@@ -14,6 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug - Check if secrets are available
+        run: |
+          echo "Checking secrets availability (not showing values)..."
+          [ -n "${{ secrets.UISP_BASE_URL }}" ] && echo "✅ UISP_BASE_URL is set" || echo "❌ UISP_BASE_URL is EMPTY"
+          [ -n "${{ secrets.UISP_TOKEN }}" ] && echo "✅ UISP_TOKEN is set" || echo "❌ UISP_TOKEN is EMPTY"
+          [ -n "${{ secrets.OPENAI_API_KEY }}" ] && echo "✅ OPENAI_API_KEY is set" || echo "❌ OPENAI_API_KEY is EMPTY"
+          [ -n "${{ secrets.DATABASE_URL }}" ] && echo "✅ DATABASE_URL is set" || echo "❌ DATABASE_URL is EMPTY"
+          [ -n "${{ secrets.WHATSAPP_API_URL }}" ] && echo "✅ WHATSAPP_API_URL is set" || echo "❌ WHATSAPP_API_URL is EMPTY"
+
       - name: Create .env file from secrets
         run: |
           cat > .env.deploy << EOF
@@ -31,6 +40,18 @@ jobs:
           POLLING_INTERVAL_SECONDS=${{ secrets.POLLING_INTERVAL_SECONDS }}
           ALERT_OUTAGE_THRESHOLD_PERCENT=${{ secrets.ALERT_OUTAGE_THRESHOLD_PERCENT }}
           EOF
+
+      - name: Debug - Verify .env.deploy content
+        run: |
+          echo "Checking .env.deploy file..."
+          if [ -f ".env.deploy" ]; then
+            echo "✅ File exists"
+            echo "File size: $(wc -c < .env.deploy) bytes"
+            echo "Lines with values: $(grep -c '=' .env.deploy || echo 0)"
+            echo "Empty lines: $(grep -c '^[A-Z_]*=$' .env.deploy || echo 0)"
+          else
+            echo "❌ File does not exist"
+          fi
 
       - name: Copy .env to VPS
         uses: appleboy/scp-action@v0.1.7
