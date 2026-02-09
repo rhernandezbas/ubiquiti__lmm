@@ -168,8 +168,13 @@ class UNMSAlertingService:
             outage_percentage = self.calculate_outage_percentage(device_count, outage_count)
             is_down = self.is_site_down(outage_percentage)
 
+            # Get previous state to detect state changes
+            site_id = identification.get('id')
+            existing_site = self.site_repo.get_site_by_id(site_id)
+            previous_is_down = existing_site.is_site_down if existing_site else False
+
             site_monitoring_data = {
-                'site_id': identification.get('id'),
+                'site_id': site_id,
                 'site_name': identification.get('name', 'Unknown'),
                 'site_status': identification.get('status'),
                 'site_type': identification.get('type'),
@@ -193,6 +198,17 @@ class UNMSAlertingService:
                 'last_updated': datetime.fromisoformat(identification.get('updated').replace('Z', '+00:00')) if identification.get('updated') else datetime.now(),
                 'created_at': datetime.now()
             }
+
+            # Handle outage_start based on state change
+            if not previous_is_down and is_down:
+                # Site just went down - record outage start time
+                site_monitoring_data['outage_start'] = datetime.now()
+                logger.warning(f"🔴 Site {site_monitoring_data['site_name']} went DOWN - recording outage_start")
+            elif previous_is_down and not is_down:
+                # Site recovered - clear outage start time
+                site_monitoring_data['outage_start'] = None
+                logger.info(f"✅ Site {site_monitoring_data['site_name']} RECOVERED - clearing outage_start")
+            # If state didn't change, don't include outage_start (preserve existing value)
 
             site = self.site_repo.create_or_update_site(site_monitoring_data)
 

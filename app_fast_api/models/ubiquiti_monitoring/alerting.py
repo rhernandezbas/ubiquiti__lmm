@@ -62,6 +62,7 @@ class SiteMonitoring(Base):
     # Calculated metrics
     outage_percentage = Column(Float, default=0.0)
     is_site_down = Column(Boolean, default=False)
+    outage_start = Column(DateTime, nullable=True)  # Timestamp when site went down
 
     # Additional info
     note = Column(Text)
