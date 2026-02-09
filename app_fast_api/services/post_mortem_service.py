@@ -79,18 +79,19 @@ class PostMortemService:
             'updated_at': datetime.now()
         }
 
-        # Calculate times if available
-        if pm_data['incident_start'] and event.created_at:
-            detection_delta = event.created_at - pm_data['incident_start']
-            pm_data['detection_time'] = int(detection_delta.total_seconds() / 60)
+        # Set timestamps (not durations)
+        # detection_time: When the incident was detected (required field)
+        pm_data['detection_time'] = event.created_at or datetime.now()
 
-        if event.acknowledged_at and event.created_at:
-            response_delta = event.acknowledged_at - event.created_at
-            pm_data['response_time'] = int(response_delta.total_seconds() / 60)
+        # response_time: When response started (acknowledged timestamp)
+        pm_data['response_time'] = event.acknowledged_at  # Can be None
 
+        # resolution_time: When incident was resolved (end timestamp)
+        pm_data['resolution_time'] = pm_data['incident_end']  # Can be None
+
+        # Calculate downtime in minutes if both start and end are available
         if pm_data['incident_end'] and pm_data['incident_start']:
             resolution_delta = pm_data['incident_end'] - pm_data['incident_start']
-            pm_data['resolution_time'] = int(resolution_delta.total_seconds() / 60)
             pm_data['downtime_minutes'] = int(resolution_delta.total_seconds() / 60)
 
         post_mortem = self.pm_repo.create_post_mortem(pm_data)
@@ -172,14 +173,14 @@ class PostMortemService:
             if field in data:
                 update_data[field] = json.dumps(data[field])
 
-        # Recalculate times if dates changed
+        # Recalculate downtime if dates changed
         if 'incident_start' in data or 'incident_end' in data:
             incident_start = data.get('incident_start') or post_mortem.incident_start
             incident_end = data.get('incident_end') or post_mortem.incident_end
 
             if incident_end and incident_start:
                 resolution_delta = incident_end - incident_start
-                update_data['resolution_time'] = int(resolution_delta.total_seconds() / 60)
+                # Only update downtime_minutes (resolution_time is a timestamp, not a duration)
                 update_data['downtime_minutes'] = int(resolution_delta.total_seconds() / 60)
 
         updated_pm = self.pm_repo.update_post_mortem(pm_id, update_data)
@@ -267,12 +268,25 @@ class PostMortemService:
         pm_data = self._serialize_post_mortem(post_mortem)
 
         # Calculate additional metrics
+        # Calculate durations from timestamps
+        detection_delay_minutes = None
+        if post_mortem.incident_start and post_mortem.detection_time:
+            detection_delay_minutes = int((post_mortem.detection_time - post_mortem.incident_start).total_seconds() / 60)
+
+        response_delay_minutes = None
+        if post_mortem.detection_time and post_mortem.response_time:
+            response_delay_minutes = int((post_mortem.response_time - post_mortem.detection_time).total_seconds() / 60)
+
+        total_resolution_minutes = None
+        if post_mortem.incident_start and post_mortem.resolution_time:
+            total_resolution_minutes = int((post_mortem.resolution_time - post_mortem.incident_start).total_seconds() / 60)
+
         metrics = {
             'mttr_minutes': post_mortem.downtime_minutes,
             'mttr_hours': round(post_mortem.downtime_minutes / 60, 2) if post_mortem.downtime_minutes else None,
-            'detection_time_minutes': post_mortem.detection_time,
-            'response_time_minutes': post_mortem.response_time,
-            'resolution_time_minutes': post_mortem.resolution_time
+            'detection_delay_minutes': detection_delay_minutes,  # Time from start to detection
+            'response_delay_minutes': response_delay_minutes,  # Time from detection to response
+            'total_resolution_minutes': total_resolution_minutes  # Total time from start to resolution
         }
 
         return {
