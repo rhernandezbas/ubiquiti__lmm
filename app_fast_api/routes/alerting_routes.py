@@ -794,36 +794,68 @@ async def send_event_notification(
             # Format recovery message
             recovery_msg = whatsapp_service.format_recovery_message(site_data, recovery_event_data)
 
-            # Send based on message_type
-            if message_type in ["complete", "both"] and whatsapp_service.phone_complete:
-                results["complete"] = await whatsapp_service.send_message(
-                    whatsapp_service.phone_complete,
-                    recovery_msg
-                )
-
-            if message_type in ["summary", "both"] and whatsapp_service.phone_summary:
-                results["summary"] = await whatsapp_service.send_message(
-                    whatsapp_service.phone_summary,
-                    recovery_msg
-                )
+            # Send based on message_type (mutually exclusive)
+            if message_type == "complete":
+                # Send ONLY complete message
+                if whatsapp_service.phone_complete:
+                    results["complete"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_complete,
+                        recovery_msg
+                    )
+            elif message_type == "summary":
+                # Send ONLY summary message
+                if whatsapp_service.phone_summary:
+                    results["summary"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_summary,
+                        recovery_msg
+                    )
+            elif message_type == "both":
+                # Send both messages
+                if whatsapp_service.phone_complete:
+                    results["complete"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_complete,
+                        recovery_msg
+                    )
+                if whatsapp_service.phone_summary:
+                    results["summary"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_summary,
+                        recovery_msg
+                    )
 
         else:
             # Send outage notification
-            complete_msg = whatsapp_service.format_complete_message(site_data, event_data)
-            summary_msg = whatsapp_service.format_summary_message(site_data, event_data)
+            # Send based on message_type (mutually exclusive)
+            if message_type == "complete":
+                # Send ONLY complete message
+                if whatsapp_service.phone_complete:
+                    complete_msg = whatsapp_service.format_complete_message(site_data, event_data)
+                    results["complete"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_complete,
+                        complete_msg
+                    )
+            elif message_type == "summary":
+                # Send ONLY summary message
+                if whatsapp_service.phone_summary:
+                    summary_msg = whatsapp_service.format_summary_message(site_data, event_data)
+                    results["summary"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_summary,
+                        summary_msg
+                    )
+            elif message_type == "both":
+                # Send both messages
+                complete_msg = whatsapp_service.format_complete_message(site_data, event_data)
+                summary_msg = whatsapp_service.format_summary_message(site_data, event_data)
 
-            # Send based on message_type
-            if message_type in ["complete", "both"] and whatsapp_service.phone_complete:
-                results["complete"] = await whatsapp_service.send_message(
-                    whatsapp_service.phone_complete,
-                    complete_msg
-                )
-
-            if message_type in ["summary", "both"] and whatsapp_service.phone_summary:
-                results["summary"] = await whatsapp_service.send_message(
-                    whatsapp_service.phone_summary,
-                    summary_msg
-                )
+                if whatsapp_service.phone_complete:
+                    results["complete"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_complete,
+                        complete_msg
+                    )
+                if whatsapp_service.phone_summary:
+                    results["summary"] = await whatsapp_service.send_message(
+                        whatsapp_service.phone_summary,
+                        summary_msg
+                    )
 
         # Count successes
         notifications_sent = 0
