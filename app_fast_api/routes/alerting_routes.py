@@ -40,13 +40,16 @@ site_repo = SiteMonitoringRepository()
 event_repo = AlertEventRepository()
 pm_repo = PostMortemRepository()
 
+# Outage threshold - configurable via environment variable
+OUTAGE_THRESHOLD = float(os.getenv("ALERT_OUTAGE_THRESHOLD_PERCENT", "95.0"))
+
 unms_service = UNMSAlertingService(
     base_url=UISP_BASE_URL,
     token=UISP_TOKEN,
     site_repo=site_repo,
     event_repo=event_repo,
     pm_repo=pm_repo,
-    outage_threshold=95.0  # Default 95%
+    outage_threshold=OUTAGE_THRESHOLD  # From env var or default 95%
 )
 
 event_service = AlertEventService(event_repo=event_repo)
