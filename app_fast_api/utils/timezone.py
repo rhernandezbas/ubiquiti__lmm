@@ -32,11 +32,12 @@ def to_argentina_tz(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
 
-    # If naive, assume it's UTC
+    # If naive, assume it's already in Argentina timezone (server timezone)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=ARGENTINA_TZ)
+        return dt
 
-    # Convert to Argentina timezone
+    # If timezone-aware, convert to Argentina timezone
     return dt.astimezone(ARGENTINA_TZ)
 
 
