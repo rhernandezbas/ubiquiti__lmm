@@ -16,7 +16,7 @@ jobs:
 
       - name: Create .env file from secrets
         run: |
-          cat > .env.deploy << 'EOF'
+          cat > .env.deploy << EOF
           UISP_BASE_URL=${{ secrets.UISP_BASE_URL }}
           UISP_TOKEN=${{ secrets.UISP_TOKEN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
