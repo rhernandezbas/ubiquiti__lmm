@@ -9,6 +9,7 @@ import json
 from app_fast_api.repositories.alerting_repositories import PostMortemRepository, AlertEventRepository
 from app_fast_api.models.ubiquiti_monitoring.post_mortem import PostMortemStatus
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import to_argentina_isoformat
 
 logger = get_logger(__name__)
 
@@ -302,11 +303,11 @@ class PostMortemService:
             'alert_event_id': pm.alert_event_id,
             'title': pm.title,
             'status': pm.status.value if pm.status else None,
-            'incident_start': pm.incident_start.isoformat() if pm.incident_start else None,
-            'incident_end': pm.incident_end.isoformat() if pm.incident_end else None,
-            'detection_time': pm.detection_time.isoformat() if pm.detection_time else None,
-            'response_time': pm.response_time.isoformat() if pm.response_time else None,
-            'resolution_time': pm.resolution_time.isoformat() if pm.resolution_time else None,
+            'incident_start': to_argentina_isoformat(pm.incident_start) if pm.incident_start else None,
+            'incident_end': to_argentina_isoformat(pm.incident_end) if pm.incident_end else None,
+            'detection_time': to_argentina_isoformat(pm.detection_time) if pm.detection_time else None,
+            'response_time': to_argentina_isoformat(pm.response_time) if pm.response_time else None,
+            'resolution_time': to_argentina_isoformat(pm.resolution_time) if pm.resolution_time else None,
             'summary': pm.summary,
             'impact_description': pm.impact_description,
             'root_cause': pm.root_cause,
@@ -328,8 +329,8 @@ class PostMortemService:
             'tags': pm.tags if pm.tags else [],
             'related_incidents': pm.related_incidents if pm.related_incidents else [],
             'external_links': pm.external_links if pm.external_links else [],
-            'created_at': pm.created_at.isoformat() if pm.created_at else None,
-            'updated_at': pm.updated_at.isoformat() if pm.updated_at else None,
-            'completed_at': pm.completed_at.isoformat() if pm.completed_at else None,
-            'reviewed_at': pm.reviewed_at.isoformat() if pm.reviewed_at else None
+            'created_at': to_argentina_isoformat(pm.created_at) if pm.created_at else None,
+            'updated_at': to_argentina_isoformat(pm.updated_at) if pm.updated_at else None,
+            'completed_at': to_argentina_isoformat(pm.completed_at) if pm.completed_at else None,
+            'reviewed_at': to_argentina_isoformat(pm.reviewed_at) if pm.reviewed_at else None
         }

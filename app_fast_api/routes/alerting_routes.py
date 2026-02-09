@@ -21,7 +21,12 @@ from app_fast_api.repositories.alerting_repositories import (
 )
 from app_fast_api.models.ubiquiti_monitoring.alerting import AlertSeverity, AlertStatus, EventType
 from app_fast_api.utils.logger import get_logger
-from app_fast_api.utils.timezone import format_argentina_datetime, format_argentina_time, now_argentina
+from app_fast_api.utils.timezone import (
+    format_argentina_datetime,
+    format_argentina_time,
+    now_argentina,
+    to_argentina_isoformat
+)
 
 logger = get_logger(__name__)
 
@@ -378,7 +383,7 @@ async def get_all_monitored_sites() -> List[Dict[str, Any]]:
                 "is_site_down": site.is_site_down,
                 "contact_name": site.contact_name,
                 "contact_phone": site.contact_phone,
-                "last_checked": site.last_checked.isoformat() if site.last_checked else None,
+                "last_checked": to_argentina_isoformat(site.last_checked) if site.last_checked else None,
                 "latitude": site.latitude,
                 "longitude": site.longitude
             }
@@ -407,10 +412,10 @@ async def get_sites_with_outages() -> List[Dict[str, Any]]:
                 "device_outage_count": site.device_outage_count,
                 "outage_percentage": round(site.outage_percentage, 2),
                 "is_site_down": site.is_site_down,
-                "outage_start": site.outage_start.isoformat() if site.outage_start else None,
+                "outage_start": to_argentina_isoformat(site.outage_start) if site.outage_start else None,
                 "contact_name": site.contact_name,
                 "contact_phone": site.contact_phone,
-                "last_checked": site.last_checked.isoformat() if site.last_checked else None
+                "last_checked": to_argentina_isoformat(site.last_checked) if site.last_checked else None
             }
             for site in sites
         ]
@@ -448,9 +453,9 @@ async def get_site_details(site_id: str) -> Dict[str, Any]:
             "device_outage_count": site.device_outage_count,
             "outage_percentage": round(site.outage_percentage, 2),
             "is_site_down": site.is_site_down,
-            "outage_start": site.outage_start.isoformat() if site.outage_start else None,
+            "outage_start": to_argentina_isoformat(site.outage_start) if site.outage_start else None,
             "note": site.note,
-            "last_checked": site.last_checked.isoformat() if site.last_checked else None
+            "last_checked": to_argentina_isoformat(site.last_checked) if site.last_checked else None
         }
 
     except HTTPException:
@@ -521,11 +526,11 @@ async def list_events(
                 "outage_count": event.outage_count,
                 "outage_percentage": round(event.outage_percentage, 2) if event.outage_percentage else None,
                 "acknowledged_by": event.acknowledged_by,
-                "acknowledged_at": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+                "acknowledged_at": to_argentina_isoformat(event.acknowledged_at) if event.acknowledged_at else None,
                 "resolved_by": event.resolved_by,
-                "resolved_at": event.resolved_at.isoformat() if event.resolved_at else None,
+                "resolved_at": to_argentina_isoformat(event.resolved_at) if event.resolved_at else None,
                 "auto_resolved": event.auto_resolved,
-                "created_at": event.created_at.isoformat() if event.created_at else None
+                "created_at": to_argentina_isoformat(event.created_at) if event.created_at else None
             }
             for event in events
         ]
@@ -552,7 +557,7 @@ async def get_active_events() -> List[Dict[str, Any]]:
                 "description": event.description,
                 "site_id": event.site_id,
                 "outage_percentage": round(event.outage_percentage, 2) if event.outage_percentage else None,
-                "created_at": event.created_at.isoformat() if event.created_at else None
+                "created_at": to_argentina_isoformat(event.created_at) if event.created_at else None
             }
             for event in events
         ]
@@ -586,14 +591,14 @@ async def get_event_details(event_id: int) -> Dict[str, Any]:
             "outage_percentage": round(event.outage_percentage, 2) if event.outage_percentage else None,
             "custom_data": event.custom_data,
             "acknowledged_by": event.acknowledged_by,
-            "acknowledged_at": event.acknowledged_at.isoformat() if event.acknowledged_at else None,
+            "acknowledged_at": to_argentina_isoformat(event.acknowledged_at) if event.acknowledged_at else None,
             "acknowledged_note": event.acknowledged_note,
             "resolved_by": event.resolved_by,
-            "resolved_at": event.resolved_at.isoformat() if event.resolved_at else None,
+            "resolved_at": to_argentina_isoformat(event.resolved_at) if event.resolved_at else None,
             "resolved_note": event.resolved_note,
             "auto_resolved": event.auto_resolved,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
-            "updated_at": event.updated_at.isoformat() if event.updated_at else None
+            "created_at": to_argentina_isoformat(event.created_at) if event.created_at else None,
+            "updated_at": to_argentina_isoformat(event.updated_at) if event.updated_at else None
         }
 
     except HTTPException:

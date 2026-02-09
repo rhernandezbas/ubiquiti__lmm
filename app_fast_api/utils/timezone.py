@@ -82,3 +82,25 @@ def format_argentina_date(dt: Optional[datetime]) -> str:
         str: Formatted date string (YYYY-MM-DD)
     """
     return format_argentina_datetime(dt, '%Y-%m-%d')
+
+
+def to_argentina_isoformat(dt: Optional[datetime]) -> Optional[str]:
+    """
+    Convert datetime to Argentina timezone and return ISO format string.
+
+    Args:
+        dt: Datetime to convert (can be naive or aware)
+
+    Returns:
+        str: ISO format string with Argentina timezone, or None if input is None
+
+    Example:
+        >>> dt = datetime(2026, 2, 9, 8, 13, 5)  # UTC naive
+        >>> to_argentina_isoformat(dt)
+        '2026-02-09T05:13:05-03:00'
+    """
+    if dt is None:
+        return None
+
+    argentina_dt = to_argentina_tz(dt)
+    return argentina_dt.isoformat()
