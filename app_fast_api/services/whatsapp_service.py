@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any, Optional
 from datetime import datetime
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import format_argentina_datetime, format_argentina_time, now_argentina
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class WhatsAppService:
                     "success": True,
                     "phone_number": phone_number,
                     "provider_response": result,
-                    "sent_at": datetime.now().isoformat()
+                    "sent_at": now_argentina().isoformat()
                 }
 
         except httpx.TimeoutException:
@@ -117,12 +118,25 @@ class WhatsAppService:
                 pass
             return default
 
+        # Format detection time in Argentina timezone
+        detected_at_str = event_data.get('detected_at')
+        if isinstance(detected_at_str, str):
+            try:
+                detected_dt = datetime.fromisoformat(detected_at_str.replace('Z', '+00:00'))
+                detected_at_formatted = format_argentina_datetime(detected_dt)
+            except:
+                detected_at_formatted = detected_at_str
+        elif isinstance(detected_at_str, datetime):
+            detected_at_formatted = format_argentina_datetime(detected_at_str)
+        else:
+            detected_at_formatted = format_argentina_datetime(now_argentina())
+
         # Build complete message
         message = f"""🚨 ALERTA CRÍTICA - SITE CAÍDO
 
 📍 Site: {site_name}
 ⚠️ Estado: {outage_pct:.0f}% de dispositivos caídos ({device_outage}/{device_count})
-🕐 Detectado: {event_data.get('detected_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}
+🕐 Detectado: {detected_at_formatted}
 
 📋 INFORMACIÓN DE CONTACTO
 👤 Contacto: {contact_name}
@@ -166,7 +180,18 @@ Horarios: {extract_info(description, "Horarios permitidos:", "No especificado")}
         device_outage = site_data.get("description", {}).get("deviceOutageCount", 0)
         outage_pct = (device_outage / device_count * 100) if device_count > 0 else 0
 
-        detected_time = event_data.get('detected_at', datetime.now().strftime('%H:%M:%S'))
+        # Format detection time in Argentina timezone
+        detected_at_str = event_data.get('detected_at')
+        if isinstance(detected_at_str, str):
+            try:
+                detected_dt = datetime.fromisoformat(detected_at_str.replace('Z', '+00:00'))
+                detected_time = format_argentina_datetime(detected_dt)
+            except:
+                detected_time = detected_at_str
+        elif isinstance(detected_at_str, datetime):
+            detected_time = format_argentina_datetime(detected_at_str)
+        else:
+            detected_time = format_argentina_datetime(now_argentina())
 
         message = f"""🚨 ALERTA: {site_name} CAÍDO
 ⚠️ {device_outage}/{device_count} dispositivos down ({outage_pct:.0f}%)
@@ -193,7 +218,18 @@ Horarios: {extract_info(description, "Horarios permitidos:", "No especificado")}
         minutes = downtime % 60
         downtime_str = f"{hours}h {minutes}min" if hours > 0 else f"{minutes}min"
 
-        recovery_time = event_data.get('recovered_at', datetime.now().strftime('%H:%M:%S'))
+        # Format recovery time in Argentina timezone
+        recovered_at_str = event_data.get('recovered_at')
+        if isinstance(recovered_at_str, str):
+            try:
+                recovered_dt = datetime.fromisoformat(recovered_at_str.replace('Z', '+00:00'))
+                recovery_time = format_argentina_time(recovered_dt)
+            except:
+                recovery_time = recovered_at_str
+        elif isinstance(recovered_at_str, datetime):
+            recovery_time = format_argentina_time(recovered_at_str)
+        else:
+            recovery_time = format_argentina_time(now_argentina())
 
         message = f"""✅ RECUPERACIÓN: {site_name}
 ⏱️ Caída: {downtime_str}

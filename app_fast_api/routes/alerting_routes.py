@@ -21,6 +21,7 @@ from app_fast_api.repositories.alerting_repositories import (
 )
 from app_fast_api.models.ubiquiti_monitoring.alerting import AlertSeverity, AlertStatus, EventType
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import format_argentina_datetime, format_argentina_time, now_argentina
 
 logger = get_logger(__name__)
 
@@ -763,9 +764,9 @@ async def send_event_notification(
                 }
             }
 
-        # Prepare event data
+        # Prepare event data (in Argentina timezone)
         event_data = {
-            "detected_at": event.created_at.strftime('%Y-%m-%d %H:%M:%S') if event.created_at else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            "detected_at": format_argentina_datetime(event.created_at if event.created_at else now_argentina())
         }
 
         # Normalize message_type
@@ -787,7 +788,7 @@ async def send_event_notification(
                 downtime_minutes = 0
 
             recovery_event_data = {
-                "recovered_at": event.resolved_at.strftime('%H:%M:%S') if event.resolved_at else datetime.now().strftime('%H:%M:%S'),
+                "recovered_at": event.resolved_at if event.resolved_at else now_argentina(),  # Pass datetime, will be formatted in WhatsApp service
                 "downtime_minutes": downtime_minutes
             }
 

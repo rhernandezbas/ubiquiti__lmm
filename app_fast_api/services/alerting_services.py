@@ -13,6 +13,7 @@ from app_fast_api.repositories.alerting_repositories import (
     SiteMonitoringRepository, AlertEventRepository, PostMortemRepository
 )
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import format_argentina_datetime, now_argentina
 
 logger = get_logger(__name__)
 
@@ -435,9 +436,9 @@ class UNMSAlertingService:
                         if event.event_type == EventType.SITE_OUTAGE:
                             logger.info(f"🚨 Sending outage alerts for {site.site_name}")
 
-                            # Prepare event data for notification
+                            # Prepare event data for notification (in Argentina timezone)
                             event_data = {
-                                'detected_at': event.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                                'detected_at': format_argentina_datetime(event.created_at)
                             }
 
                             # Send WhatsApp notifications
@@ -473,7 +474,7 @@ class UNMSAlertingService:
                                             downtime_minutes = int((resolved_event.resolved_at - resolved_event.created_at).total_seconds() / 60)
 
                                         recovery_event_data = {
-                                            'recovered_at': resolved_event.resolved_at.strftime('%H:%M:%S'),
+                                            'recovered_at': resolved_event.resolved_at,  # Pass datetime, will be formatted in WhatsApp service
                                             'downtime_minutes': downtime_minutes
                                         }
 
