@@ -406,6 +406,7 @@ async def get_sites_with_outages() -> List[Dict[str, Any]]:
                 "device_outage_count": site.device_outage_count,
                 "outage_percentage": round(site.outage_percentage, 2),
                 "is_site_down": site.is_site_down,
+                "outage_start": site.outage_start.isoformat() if site.outage_start else None,
                 "contact_name": site.contact_name,
                 "contact_phone": site.contact_phone,
                 "last_checked": site.last_checked.isoformat() if site.last_checked else None
@@ -446,6 +447,7 @@ async def get_site_details(site_id: str) -> Dict[str, Any]:
             "device_outage_count": site.device_outage_count,
             "outage_percentage": round(site.outage_percentage, 2),
             "is_site_down": site.is_site_down,
+            "outage_start": site.outage_start.isoformat() if site.outage_start else None,
             "note": site.note,
             "last_checked": site.last_checked.isoformat() if site.last_checked else None
         }
