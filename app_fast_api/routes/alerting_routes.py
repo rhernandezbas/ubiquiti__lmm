@@ -679,6 +679,118 @@ async def delete_event(event_id: int) -> EventResponse:
         raise HTTPException(status_code=500, detail=f"Error deleting event: {str(e)}")
 
 
+@router.post("/events/{event_id}/notify", response_model=Dict[str, Any])
+async def send_event_notification(event_id: int) -> Dict[str, Any]:
+    """
+    Send WhatsApp notification for a specific event.
+
+    Sends alerts to both configured phone numbers (complete and summary).
+    Useful for:
+    - Resending failed notifications
+    - Manually notifying events
+    - Testing notifications with real event data
+
+    Examples:
+        ```bash
+        # Send notification for event ID 5
+        curl -X POST http://190.7.234.37:7657/api/v1/alerting/events/5/notify
+        ```
+    """
+    try:
+        # Get event
+        event = event_repo.get_event_by_id(event_id)
+        if not event:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+
+        # Get site data
+        site = site_repo.get_site_by_id(event.site_id) if event.site_id else None
+        if not site:
+            raise HTTPException(status_code=404, detail=f"Site for event {event_id} not found")
+
+        # Get full site data from UNMS for complete message
+        try:
+            sites_data = await unms_service.get_all_sites()
+            site_data = next((s for s in sites_data if s.get('identification', {}).get('id') == site.site_id), None)
+
+            if not site_data:
+                # Fallback to basic site data
+                site_data = {
+                    "identification": {"name": site.site_name, "id": site.site_id},
+                    "description": {
+                        "deviceCount": site.device_count,
+                        "deviceOutageCount": site.device_outage_count,
+                        "contact": {
+                            "name": site.contact_name,
+                            "phone": site.contact_phone,
+                            "email": site.contact_email
+                        }
+                    }
+                }
+        except Exception as e:
+            logger.warning(f"Could not get full UNMS data: {e}, using basic site data")
+            site_data = {
+                "identification": {"name": site.site_name, "id": site.site_id},
+                "description": {
+                    "deviceCount": site.device_count,
+                    "deviceOutageCount": site.device_outage_count,
+                    "contact": {
+                        "name": site.contact_name,
+                        "phone": site.contact_phone,
+                        "email": site.contact_email
+                    }
+                }
+            }
+
+        # Prepare event data
+        event_data = {
+            "detected_at": event.created_at.strftime('%Y-%m-%d %H:%M:%S') if event.created_at else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+        # Send appropriate notifications based on event type
+        results = {}
+
+        if event.status == AlertStatus.RESOLVED:
+            # Send recovery notification
+            if event.resolved_at and event.created_at:
+                downtime_minutes = int((event.resolved_at - event.created_at).total_seconds() / 60)
+            else:
+                downtime_minutes = 0
+
+            recovery_event_data = {
+                "recovered_at": event.resolved_at.strftime('%H:%M:%S') if event.resolved_at else datetime.now().strftime('%H:%M:%S'),
+                "downtime_minutes": downtime_minutes
+            }
+
+            results = await whatsapp_service.send_recovery_alert(site_data, recovery_event_data)
+
+        else:
+            # Send outage notification
+            results = await whatsapp_service.send_outage_alert(site_data, event_data)
+
+        # Count successes
+        notifications_sent = 0
+        if results.get('complete', {}).get('success'):
+            notifications_sent += 1
+        if results.get('summary', {}).get('success'):
+            notifications_sent += 1
+
+        return {
+            "success": True,
+            "message": f"Notifications sent for event {event_id}",
+            "event_id": event_id,
+            "event_title": event.title,
+            "event_status": event.status.value,
+            "notifications_sent": notifications_sent,
+            "results": results
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending notification for event {event_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error sending notification: {str(e)}")
+
+
 # ============== Post-Mortem Endpoints ==============
 
 @router.post("/post-mortems")
