@@ -2,7 +2,7 @@
 Post-Mortem and Notification Models for Alert System
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Enum as SQLEnum, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, ForeignKey, Boolean, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
