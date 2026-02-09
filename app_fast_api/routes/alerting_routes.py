@@ -688,25 +688,27 @@ async def delete_event(event_id: int) -> EventResponse:
 @router.post("/events/{event_id}/notify", response_model=Dict[str, Any])
 async def send_event_notification(
     event_id: int,
-    message_type: Optional[str] = Query(None, description="Message type: 'complete', 'summary', or 'both' (default)")
+    message_type: Optional[str] = Query(None, description="Message type: 'complete', 'summary', 'both', or 'recovery'")
 ) -> Dict[str, Any]:
     """
     Send WhatsApp notification for a specific event.
 
     Args:
         event_id: Event ID to send notification for
-        message_type: Optional - 'complete' (detailed), 'summary' (brief), or 'both' (default)
+        message_type: Optional - 'complete', 'summary', 'both' (default), or 'recovery' (manual)
 
-    By default sends both messages. Use message_type to send only one.
+    By default sends both messages and auto-detects outage/recovery by event status.
+    Use 'recovery' to manually force a recovery message.
 
     Useful for:
     - Resending failed notifications
     - Manually notifying events
     - Testing notifications with real event data
+    - Sending recovery notifications manually
 
     Examples:
         ```bash
-        # Send both messages (default)
+        # Send both messages (default, auto-detect outage/recovery)
         curl -X POST http://190.7.234.37:7657/api/v1/alerting/events/5/notify
 
         # Send only complete message
@@ -714,6 +716,9 @@ async def send_event_notification(
 
         # Send only summary message
         curl -X POST "http://190.7.234.37:7657/api/v1/alerting/events/5/notify?message_type=summary"
+
+        # Force recovery message (manual)
+        curl -X POST "http://190.7.234.37:7657/api/v1/alerting/events/5/notify?message_type=recovery"
         ```
     """
     try:
@@ -779,13 +784,40 @@ async def send_event_notification(
             message_type = "both"
         message_type = message_type.lower()
 
-        if message_type not in ["complete", "summary", "both"]:
-            raise HTTPException(status_code=400, detail="message_type must be 'complete', 'summary', or 'both'")
+        if message_type not in ["complete", "summary", "both", "recovery"]:
+            raise HTTPException(status_code=400, detail="message_type must be 'complete', 'summary', 'both', or 'recovery'")
 
         # Send appropriate notifications based on event type and message_type
         results = {}
 
-        if event.status == AlertStatus.RESOLVED:
+        # Handle manual recovery message type
+        if message_type == "recovery":
+            # Force recovery message regardless of event status
+            if event.resolved_at and event.created_at:
+                downtime_minutes = int((event.resolved_at - event.created_at).total_seconds() / 60)
+            else:
+                downtime_minutes = 0
+
+            recovery_event_data = {
+                "recovered_at": event.resolved_at if event.resolved_at else now_argentina(),
+                "downtime_minutes": downtime_minutes
+            }
+
+            recovery_msg = whatsapp_service.format_recovery_message(site_data, recovery_event_data)
+
+            # Send to both numbers
+            if whatsapp_service.phone_complete:
+                results["complete"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_complete,
+                    recovery_msg
+                )
+            if whatsapp_service.phone_summary:
+                results["summary"] = await whatsapp_service.send_message(
+                    whatsapp_service.phone_summary,
+                    recovery_msg
+                )
+
+        elif event.status == AlertStatus.RESOLVED:
             # Send recovery notification
             if event.resolved_at and event.created_at:
                 downtime_minutes = int((event.resolved_at - event.created_at).total_seconds() / 60)
