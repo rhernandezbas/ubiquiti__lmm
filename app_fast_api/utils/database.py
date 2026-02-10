@@ -42,7 +42,7 @@ def init_db():
     try:
         # Import all models here to ensure they are registered
         from app_fast_api.models.ubiquiti_monitoring.device_analysis import DeviceAnalysis, ScanResult, FrequencyChange
-        from app_fast_api.models.ubiquiti_monitoring.feedback import Feedback
+        from app_fast_api.models.ubiquiti_monitoring.feedback import DeviceAnalysisFeedback
         from app_fast_api.models.ubiquiti_monitoring.alerting import SiteMonitoring, AlertEvent
 
         # Create all tables
