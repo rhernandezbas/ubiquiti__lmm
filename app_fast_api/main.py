@@ -14,40 +14,51 @@ print(f"🔍 DATABASE_URL cargada: {database_url}")
 
 logger = logging.getLogger(__name__)
 
-# Ejecutar migración de base de datos antes de iniciar el servidor
-def run_migration():
-    """Ejecutar migración de base de datos"""
-    logger.info("Verificando si necesita migración de base de datos...")
-    
+# Ejecutar migraciones de Alembic automáticamente
+def run_alembic_migrations():
+    """Ejecutar migraciones de Alembic automáticamente al iniciar"""
+    logger.info("🔧 Ejecutando migraciones de Alembic...")
+
     try:
-        
-        # Verificar si las tablas ya existen
-        with engine.connect() as conn:
-            result = conn.execute("SHOW TABLES LIKE 'device_analysis'").fetchall()
-            if result:
-                logger.info("Las tablas ya existen, omitiendo migración")
-                return True
-            else:
-                logger.info("Tablas no encontradas, ejecutando migración...")
-        
-        # Ejecutar migración
-        init_db()
-        logger.info("Migración completada exitosamente")
+        from alembic.config import Config
+        from alembic import command
+        from pathlib import Path
+
+        # Get project root (parent of app_fast_api)
+        project_root = Path(__file__).parent.parent
+        alembic_ini = project_root / "alembic.ini"
+
+        if not alembic_ini.exists():
+            logger.warning(f"⚠️ alembic.ini not found at {alembic_ini}, skipping migrations")
+            return False
+
+        # Configure Alembic
+        alembic_cfg = Config(str(alembic_ini))
+        alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+
+        # Run migrations to head (latest)
+        logger.info("📝 Applying pending migrations...")
+        command.upgrade(alembic_cfg, "head")
+
+        logger.info("✅ Migraciones de Alembic completadas exitosamente")
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error en migración: {str(e)}")
-        logger.warning("La aplicación continuará sin funcionalidad de base de datos")
+        logger.error(f"❌ Error ejecutando migraciones de Alembic: {str(e)}")
+        logger.warning("La aplicación continuará, pero la base de datos puede estar desactualizada")
+        import traceback
+        traceback.print_exc()
         return False
 
 app = create_app()
 
 if __name__ == "__main__":
-    # Primero ejecutar la migración
-    #migration_success = run_migration()
-    
+    # Ejecutar migraciones de Alembic automáticamente
+    logger.info("🚀 Iniciando aplicación...")
+    run_alembic_migrations()
+
     # Luego iniciar el servidor
-    logger.info("Iniciando servidor FastAPI...")
+    logger.info("🌐 Iniciando servidor FastAPI...")
     uvicorn.run(
         "app_fast_api.main:app",
         host="0.0.0.0",
