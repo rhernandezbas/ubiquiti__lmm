@@ -219,6 +219,38 @@ class AlertEventRepository(IAlertEventRepository):
         finally:
             db.close()
 
+    def mark_recovery_notified(self, event_id: int) -> Optional[AlertEvent]:
+        """Mark event as recovery notified."""
+        db = SessionLocal()
+        try:
+            event = db.query(AlertEvent).filter_by(id=event_id).first()
+            if not event:
+                raise ValueError(f"Event with id {event_id} not found")
+
+            event.recovery_notified = True
+            event.updated_at = datetime.now()
+
+            db.commit()
+            db.refresh(event)
+            logger.info(f"Event {event_id} marked as recovery notified")
+            return event
+        finally:
+            db.close()
+
+    def get_resolved_events_pending_notification(self) -> List[AlertEvent]:
+        """Get resolved events that haven't been notified yet."""
+        db = SessionLocal()
+        try:
+            return db.query(AlertEvent).filter(
+                and_(
+                    AlertEvent.status == AlertStatus.RESOLVED,
+                    AlertEvent.auto_resolved == True,
+                    AlertEvent.recovery_notified == False
+                )
+            ).order_by(AlertEvent.resolved_at).all()
+        finally:
+            db.close()
+
     def delete_event(self, event_id: int) -> None:
         """Delete an event."""
         db = SessionLocal()

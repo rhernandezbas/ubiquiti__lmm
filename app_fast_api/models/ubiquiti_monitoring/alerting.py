@@ -129,6 +129,7 @@ class AlertEvent(Base):
     resolved_by = Column(String(200))
     resolved_note = Column(Text)
     auto_resolved = Column(Boolean, default=False)
+    recovery_notified = Column(Boolean, default=False)  # Track if recovery notification was sent
 
     # Timestamps
     created_at = Column(DateTime, nullable=False)

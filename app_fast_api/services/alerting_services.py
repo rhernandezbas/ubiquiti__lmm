@@ -457,42 +457,41 @@ class UNMSAlertingService:
 
                             sites_down += 1
 
-                    # Check for recoveries
+                    # Check for recoveries - use flag instead of time window
                     if not site.is_site_down and site.outage_percentage < 50.0:
-                        # Check if there were active events that got resolved
-                        recently_resolved = self.event_repo.get_events_by_site(site.id)
+                        # Get resolved events that haven't been notified yet
+                        pending_notifications = [
+                            e for e in self.event_repo.get_events_by_site(site.id)
+                            if e.status == AlertStatus.RESOLVED
+                            and e.auto_resolved
+                            and not e.recovery_notified
+                        ]
 
-                        # Find the most recent resolved event (to avoid duplicate notifications)
-                        most_recent_resolved = None
-                        for resolved_event in recently_resolved:
-                            if resolved_event.status == AlertStatus.RESOLVED and resolved_event.auto_resolved:
-                                if resolved_event.resolved_at:
-                                    time_since_resolution = (now_argentina() - resolved_event.resolved_at).total_seconds()
-                                    if time_since_resolution < 60:  # Resolved in last minute
-                                        if most_recent_resolved is None or resolved_event.resolved_at > most_recent_resolved.resolved_at:
-                                            most_recent_resolved = resolved_event
-
-                        # Send only ONE recovery notification per site (for the most recent event)
-                        if most_recent_resolved:
-                            logger.info(f"✅ Sending recovery alerts for {site.site_name} (event {most_recent_resolved.id})")
+                        # Send recovery notification for each pending event (usually just one)
+                        for resolved_event in pending_notifications:
+                            logger.info(f"✅ Sending recovery alerts for {site.site_name} (event {resolved_event.id})")
 
                             downtime_minutes = 0
-                            if most_recent_resolved.created_at and most_recent_resolved.resolved_at:
-                                downtime_minutes = int((most_recent_resolved.resolved_at - most_recent_resolved.created_at).total_seconds() / 60)
+                            if resolved_event.created_at and resolved_event.resolved_at:
+                                downtime_minutes = int((resolved_event.resolved_at - resolved_event.created_at).total_seconds() / 60)
 
                             recovery_event_data = {
-                                'recovered_at': most_recent_resolved.resolved_at,  # Pass datetime, will be formatted in WhatsApp service
+                                'recovered_at': resolved_event.resolved_at,  # Pass datetime, will be formatted in WhatsApp service
                                 'downtime_minutes': downtime_minutes
                             }
 
                             # Send recovery notifications
                             recovery_results = await whatsapp_service.send_recovery_alert(site_data, recovery_event_data)
 
+                            # Track notification results
                             if recovery_results.get('complete', {}).get('success'):
                                 notifications_sent += 1
 
                             if recovery_results.get('summary', {}).get('success'):
                                 notifications_sent += 1
+
+                            # Mark as notified (even if notification failed, to avoid infinite retries)
+                            self.event_repo.mark_recovery_notified(resolved_event.id)
 
                             sites_recovered += 1
 
