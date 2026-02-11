@@ -9,6 +9,7 @@ from app_fast_api.models.ubiquiti_monitoring.alerting import SiteMonitoring, Ale
 from app_fast_api.models.ubiquiti_monitoring.post_mortem import AlertNotification, PostMortem, NotificationStatus, PostMortemStatus
 from app_fast_api.interfaces.alerting_interfaces import ISiteMonitoringRepository, IAlertEventRepository
 from app_fast_api.utils.logger import get_logger
+from app_fast_api.utils.timezone import now_argentina
 
 logger = get_logger(__name__)
 
@@ -167,7 +168,7 @@ class AlertEventRepository(IAlertEventRepository):
                 raise ValueError(f"Event with id {event_id} not found")
 
             event.status = status
-            event.updated_at = datetime.now()
+            event.updated_at = now_argentina()
 
             db.commit()
             db.refresh(event)
@@ -186,9 +187,9 @@ class AlertEventRepository(IAlertEventRepository):
 
             event.status = AlertStatus.ACKNOWLEDGED
             event.acknowledged_by = acknowledged_by
-            event.acknowledged_at = datetime.now()
+            event.acknowledged_at = now_argentina()
             event.acknowledged_note = note
-            event.updated_at = datetime.now()
+            event.updated_at = now_argentina()
 
             db.commit()
             db.refresh(event)
@@ -207,10 +208,10 @@ class AlertEventRepository(IAlertEventRepository):
 
             event.status = AlertStatus.RESOLVED
             event.resolved_by = resolved_by
-            event.resolved_at = datetime.now()
+            event.resolved_at = now_argentina()
             event.resolved_note = note
             event.auto_resolved = auto_resolved
-            event.updated_at = datetime.now()
+            event.updated_at = now_argentina()
 
             db.commit()
             db.refresh(event)
@@ -228,7 +229,7 @@ class AlertEventRepository(IAlertEventRepository):
                 raise ValueError(f"Event with id {event_id} not found")
 
             event.recovery_notified = True
-            event.updated_at = datetime.now()
+            event.updated_at = now_argentina()
 
             db.commit()
             db.refresh(event)
@@ -345,12 +346,12 @@ class AlertNotificationRepository:
                 raise ValueError(f"Notification with id {notification_id} not found")
 
             notification.status = status
-            notification.updated_at = datetime.now()
+            notification.updated_at = now_argentina()
 
             if status == NotificationStatus.SENT:
-                notification.sent_at = datetime.now()
+                notification.sent_at = now_argentina()
             elif status == NotificationStatus.FAILED:
-                notification.failed_at = datetime.now()
+                notification.failed_at = now_argentina()
                 notification.error_message = error_message
 
             db.commit()
@@ -368,7 +369,7 @@ class AlertNotificationRepository:
                 raise ValueError(f"Notification with id {notification_id} not found")
 
             notification.retry_count += 1
-            notification.updated_at = datetime.now()
+            notification.updated_at = now_argentina()
 
             db.commit()
             db.refresh(notification)
@@ -438,7 +439,7 @@ class PostMortemRepository:
                 if hasattr(post_mortem, key) and value is not None:
                     setattr(post_mortem, key, value)
 
-            post_mortem.updated_at = datetime.now()
+            post_mortem.updated_at = now_argentina()
 
             db.commit()
             db.refresh(post_mortem)
@@ -456,12 +457,12 @@ class PostMortemRepository:
                 raise ValueError(f"Post-mortem with id {pm_id} not found")
 
             post_mortem.status = status
-            post_mortem.updated_at = datetime.now()
+            post_mortem.updated_at = now_argentina()
 
             if status == PostMortemStatus.COMPLETED:
-                post_mortem.completed_at = datetime.now()
+                post_mortem.completed_at = now_argentina()
             elif status == PostMortemStatus.REVIEWED:
-                post_mortem.reviewed_at = datetime.now()
+                post_mortem.reviewed_at = now_argentina()
 
             db.commit()
             db.refresh(post_mortem)

@@ -460,11 +460,13 @@ class UNMSAlertingService:
                     # Check for recoveries - use flag instead of time window
                     if not site.is_site_down and site.outage_percentage < 50.0:
                         # Get resolved events that haven't been notified yet
+                        # ONLY send recovery for CRITICAL (SITE_OUTAGE), not WARNING (SITE_DEGRADED)
                         pending_notifications = [
                             e for e in self.event_repo.get_events_by_site(site.id)
                             if e.status == AlertStatus.RESOLVED
                             and e.auto_resolved
                             and not e.recovery_notified
+                            and e.event_type == EventType.SITE_OUTAGE  # Only CRITICAL events get recovery notifications
                         ]
 
                         # Send recovery notification for each pending event (usually just one)
