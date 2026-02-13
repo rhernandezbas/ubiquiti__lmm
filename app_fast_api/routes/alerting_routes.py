@@ -930,6 +930,7 @@ async def create_post_mortem(request: CreatePostMortemRequest) -> Dict[str, Any]
     Create a new post-mortem for an incident.
     """
     try:
+        logger.info(f"Creating post-mortem with alert_event_id={request.alert_event_id}, title={request.title}")
         post_mortem = pm_service.create_post_mortem(
             alert_event_id=request.alert_event_id,
             data=request.dict(exclude_none=True)
@@ -942,9 +943,10 @@ async def create_post_mortem(request: CreatePostMortemRequest) -> Dict[str, Any]
         }
 
     except ValueError as e:
+        logger.error(f"Validation error creating post-mortem: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error creating post-mortem: {str(e)}")
+        logger.error(f"Error creating post-mortem: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating post-mortem: {str(e)}")
 
 
