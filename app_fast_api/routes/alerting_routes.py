@@ -974,6 +974,25 @@ async def list_post_mortems(
         raise HTTPException(status_code=500, detail=f"Error listing post-mortems: {str(e)}")
 
 
+@router.get("/post-mortems/primary")
+async def list_primary_post_mortems(
+    status: Optional[str] = Query(None),
+    limit: int = Query(100, le=500)
+) -> List[Dict[str, Any]]:
+    """
+    Listar solo post-mortems primarios (sin padre).
+
+    Úsalo en lugar de GET /post-mortems para mostrar solo los principales
+    en el NOC Dashboard, ocultando los secundarios que están agrupados.
+
+    Cada PM incluye 'child_count' indicando cuántos secundarios tiene.
+    """
+    try:
+        return pm_service.list_primary_post_mortems(status, limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/post-mortems/{pm_id}")
 async def get_post_mortem(pm_id: int) -> Dict[str, Any]:
     """
@@ -1151,26 +1170,6 @@ async def get_related_post_mortems(pm_id: int) -> Dict[str, Any]:
         return pm_service.get_related_incidents(pm_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.get("/post-mortems/primary")
-async def list_primary_post_mortems(
-    status: Optional[str] = Query(None),
-    limit: int = Query(100, le=500)
-) -> List[Dict[str, Any]]:
-    """
-    Listar solo post-mortems primarios (sin padre).
-
-    Úsalo en lugar de GET /post-mortems para mostrar solo los principales
-    en el NOC Dashboard, ocultando los secundarios que están agrupados.
-
-    Cada PM incluye 'child_count' indicando cuántos secundarios tiene.
-    """
-    try:
-        return pm_service.list_primary_post_mortems(status, limit)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
 
 # ============== Polling Control Endpoints ==============
 
