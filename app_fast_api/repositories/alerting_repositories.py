@@ -570,6 +570,8 @@ class PostMortemRepository:
 
     def get_all_primary_post_mortems(self, status: Optional[PostMortemStatus] = None, limit: int = 100) -> List[PostMortem]:
         """Obtener solo PMs primarios (que no son secundarios de otro)."""
+        from sqlalchemy.orm import joinedload
+
         db = SessionLocal()
         try:
             query = db.query(PostMortem).outerjoin(
@@ -577,6 +579,8 @@ class PostMortemRepository:
                 PostMortem.id == PostMortemRelationship.child_post_mortem_id
             ).filter(
                 PostMortemRelationship.id == None  # No tiene padre
+            ).options(
+                joinedload(PostMortem.child_relationships)  # Eager load para evitar DetachedInstanceError
             )
 
             if status:
