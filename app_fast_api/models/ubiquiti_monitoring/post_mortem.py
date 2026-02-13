@@ -88,8 +88,8 @@ class PostMortem(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
 
-    # Relación con el evento
-    alert_event_id = Column(BigInteger, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    # Relación con el evento (opcional - permite post-mortems standalone o de eventos eliminados)
+    alert_event_id = Column(BigInteger, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=True, index=True)
     alert_event = relationship("AlertEvent", back_populates="post_mortem")
 
     # Relaciones con otros post-mortems (parent-child para root cause común)
