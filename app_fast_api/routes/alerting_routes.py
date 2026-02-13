@@ -146,7 +146,7 @@ class ScanSitesWithAlertsResponse(BaseModel):
 
 class CreatePostMortemRequest(BaseModel):
     """Request for creating a post-mortem"""
-    alert_event_id: int = Field(..., description="Alert event ID")
+    alert_event_id: Optional[int] = Field(None, description="Alert event ID (optional)")
     title: Optional[str] = Field(None, description="Post-mortem title")
     summary: Optional[str] = Field(None, description="Incident summary")
     root_cause: Optional[str] = Field(None, description="Root cause analysis")
