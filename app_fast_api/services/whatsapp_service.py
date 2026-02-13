@@ -261,10 +261,13 @@ Horarios: {extract_info(description, "Horarios permitidos:", "No especificado")}
         else:
             logger.warning("No phone number configured for complete messages")
 
-        # Send summary message
-        if self.phone_summary:
+        # Send summary message only if different from complete number
+        if self.phone_summary and self.phone_summary != self.phone_complete:
             summary_msg = self.format_summary_message(site_data, event_data)
             results["summary"] = await self.send_message(self.phone_summary, summary_msg)
+        elif self.phone_summary == self.phone_complete:
+            logger.info("Summary phone is same as complete phone, skipping duplicate message")
+            results["summary"] = results["complete"]  # Reuse complete result
         else:
             logger.warning("No phone number configured for summary messages")
 
@@ -272,7 +275,7 @@ Horarios: {extract_info(description, "Horarios permitidos:", "No especificado")}
 
     async def send_recovery_alert(self, site_data: Dict[str, Any], event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Send recovery notification to both numbers.
+        Send recovery notification to both numbers (or just one if they're the same).
 
         Args:
             site_data: Site information from UISP
@@ -288,11 +291,15 @@ Horarios: {extract_info(description, "Horarios permitidos:", "No especificado")}
             "summary": None
         }
 
-        # Send to both numbers
+        # Send to complete number
         if self.phone_complete:
             results["complete"] = await self.send_message(self.phone_complete, recovery_msg)
 
-        if self.phone_summary:
+        # Send to summary number only if different from complete number
+        if self.phone_summary and self.phone_summary != self.phone_complete:
             results["summary"] = await self.send_message(self.phone_summary, recovery_msg)
+        elif self.phone_summary == self.phone_complete:
+            logger.info("Summary phone is same as complete phone, skipping duplicate recovery message")
+            results["summary"] = results["complete"]  # Reuse complete result
 
         return results
