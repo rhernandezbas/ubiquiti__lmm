@@ -296,6 +296,79 @@ class PostMortemService:
             'generated_at': now_argentina().isoformat()
         }
 
+    def link_related_incidents(self, parent_id: int, child_id: int,
+                              relationship_type: str = 'related_root_cause',
+                              description: str = None,
+                              linked_by: str = None) -> Dict[str, Any]:
+        """Vincular un incidente secundario a uno principal."""
+        try:
+            relationship = self.pm_repo.link_post_mortems(
+                parent_id, child_id, relationship_type, description, linked_by
+            )
+
+            return {
+                'success': True,
+                'message': f'Post-mortem {child_id} vinculado como secundario de {parent_id}',
+                'relationship': {
+                    'id': relationship.id,
+                    'parent_id': relationship.parent_post_mortem_id,
+                    'child_id': relationship.child_post_mortem_id,
+                    'type': relationship.relationship_type,
+                    'description': relationship.description,
+                    'linked_by': relationship.linked_by,
+                    'created_at': to_argentina_isoformat(relationship.created_at)
+                }
+            }
+        except ValueError as e:
+            raise ValueError(str(e))
+
+    def unlink_related_incidents(self, parent_id: int, child_id: int) -> Dict[str, Any]:
+        """Desvincular un incidente secundario."""
+        try:
+            self.pm_repo.unlink_post_mortems(parent_id, child_id)
+            return {
+                'success': True,
+                'message': f'Post-mortem {child_id} desvinculado de {parent_id}'
+            }
+        except ValueError as e:
+            raise ValueError(str(e))
+
+    def get_related_incidents(self, pm_id: int) -> Dict[str, Any]:
+        """Obtener todos los incidentes relacionados con un PM."""
+        try:
+            related = self.pm_repo.get_related_post_mortems(pm_id)
+
+            return {
+                'post_mortem_id': pm_id,
+                'parent': self._serialize_post_mortem(related['parent']) if related['parent'] else None,
+                'children': [self._serialize_post_mortem(c) for c in related['children']],
+                'is_primary': related['is_primary'],
+                'is_secondary': related['is_secondary'],
+                'total_related': (1 if related['parent'] else 0) + len(related['children'])
+            }
+        except ValueError as e:
+            raise ValueError(str(e))
+
+    def list_primary_post_mortems(self, status: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Listar solo post-mortems primarios (para NOC Dashboard)."""
+        status_enum = None
+        if status:
+            try:
+                status_enum = PostMortemStatus[status.upper()]
+            except KeyError:
+                raise ValueError(f"Invalid status: {status}")
+
+        post_mortems = self.pm_repo.get_all_primary_post_mortems(status_enum, limit)
+
+        # Agregar count de secundarios
+        result = []
+        for pm in post_mortems:
+            serialized = self._serialize_post_mortem(pm)
+            serialized['child_count'] = len(pm.child_relationships)
+            result.append(serialized)
+
+        return result
+
     def _serialize_post_mortem(self, pm) -> Dict[str, Any]:
         """Serialize post-mortem to dict."""
         return {

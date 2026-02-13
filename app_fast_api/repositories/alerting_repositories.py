@@ -1,12 +1,12 @@
 """Repositories for alerting data."""
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy import and_, desc, or_
 
 from app_fast_api.utils.database import SessionLocal
 from app_fast_api.models.ubiquiti_monitoring.alerting import SiteMonitoring, AlertEvent, AlertStatus, AlertSeverity, EventType
-from app_fast_api.models.ubiquiti_monitoring.post_mortem import AlertNotification, PostMortem, NotificationStatus, PostMortemStatus
+from app_fast_api.models.ubiquiti_monitoring.post_mortem import AlertNotification, PostMortem, PostMortemRelationship, NotificationStatus, PostMortemStatus
 from app_fast_api.interfaces.alerting_interfaces import ISiteMonitoringRepository, IAlertEventRepository
 from app_fast_api.utils.logger import get_logger
 from app_fast_api.utils.timezone import now_argentina
@@ -482,5 +482,106 @@ class PostMortemRepository:
                 logger.info(f"Deleted post-mortem {pm_id}")
             else:
                 raise ValueError(f"Post-mortem with id {pm_id} not found")
+        finally:
+            db.close()
+
+    def link_post_mortems(self, parent_id: int, child_id: int,
+                         relationship_type: str = 'related_root_cause',
+                         description: str = None,
+                         linked_by: str = None) -> PostMortemRelationship:
+        """Vincular un PM secundario a un PM principal."""
+        db = SessionLocal()
+        try:
+            # Validar que ambos existen
+            parent = db.query(PostMortem).filter_by(id=parent_id).first()
+            child = db.query(PostMortem).filter_by(id=child_id).first()
+
+            if not parent or not child:
+                raise ValueError("Post-mortem no encontrado")
+
+            # Validar que child no tenga ya un padre (solo un padre permitido)
+            existing_parent = db.query(PostMortemRelationship).filter_by(
+                child_post_mortem_id=child_id
+            ).first()
+
+            if existing_parent:
+                raise ValueError(f"El post-mortem {child_id} ya está vinculado a {existing_parent.parent_post_mortem_id}")
+
+            # Crear relación
+            relationship = PostMortemRelationship(
+                parent_post_mortem_id=parent_id,
+                child_post_mortem_id=child_id,
+                relationship_type=relationship_type,
+                description=description,
+                linked_by=linked_by,
+                created_at=now_argentina()
+            )
+
+            db.add(relationship)
+            db.commit()
+            db.refresh(relationship)
+
+            logger.info(f"✅ Vinculado PM {child_id} como secundario de PM {parent_id}")
+            return relationship
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ Error vinculando post-mortems: {e}")
+            raise
+        finally:
+            db.close()
+
+    def unlink_post_mortems(self, parent_id: int, child_id: int) -> None:
+        """Desvincular un PM secundario de su principal."""
+        db = SessionLocal()
+        try:
+            relationship = db.query(PostMortemRelationship).filter_by(
+                parent_post_mortem_id=parent_id,
+                child_post_mortem_id=child_id
+            ).first()
+
+            if relationship:
+                db.delete(relationship)
+                db.commit()
+                logger.info(f"✅ Desvinculado PM {child_id} de PM {parent_id}")
+            else:
+                raise ValueError("Relación no encontrada")
+        finally:
+            db.close()
+
+    def get_related_post_mortems(self, pm_id: int) -> Dict[str, Any]:
+        """Obtener post-mortems relacionados (padre e hijos)."""
+        db = SessionLocal()
+        try:
+            pm = db.query(PostMortem).filter_by(id=pm_id).first()
+            if not pm:
+                raise ValueError(f"Post-mortem {pm_id} no encontrado")
+
+            parent = pm.get_parent_post_mortem()
+            children = pm.get_child_post_mortems()
+
+            return {
+                'parent': parent,
+                'children': children,
+                'is_primary': pm.is_primary_incident(),
+                'is_secondary': pm.is_secondary_incident()
+            }
+        finally:
+            db.close()
+
+    def get_all_primary_post_mortems(self, status: Optional[PostMortemStatus] = None, limit: int = 100) -> List[PostMortem]:
+        """Obtener solo PMs primarios (que no son secundarios de otro)."""
+        db = SessionLocal()
+        try:
+            query = db.query(PostMortem).outerjoin(
+                PostMortemRelationship,
+                PostMortem.id == PostMortemRelationship.child_post_mortem_id
+            ).filter(
+                PostMortemRelationship.id == None  # No tiene padre
+            )
+
+            if status:
+                query = query.filter(PostMortem.status == status)
+
+            return query.order_by(desc(PostMortem.created_at)).limit(limit).all()
         finally:
             db.close()

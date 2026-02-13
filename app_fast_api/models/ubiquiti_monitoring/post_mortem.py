@@ -6,6 +6,7 @@ from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, Fore
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
+from typing import List, Optional
 
 from app_fast_api.utils.database import Base
 from app_fast_api.utils.timezone import now_argentina
@@ -91,6 +92,21 @@ class PostMortem(Base):
     alert_event_id = Column(BigInteger, ForeignKey('alert_events.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     alert_event = relationship("AlertEvent", back_populates="post_mortem")
 
+    # Relaciones con otros post-mortems (parent-child para root cause común)
+    parent_relationships = relationship(
+        "PostMortemRelationship",
+        foreign_keys="PostMortemRelationship.child_post_mortem_id",
+        back_populates="child_post_mortem",
+        cascade="all, delete-orphan"
+    )
+
+    child_relationships = relationship(
+        "PostMortemRelationship",
+        foreign_keys="PostMortemRelationship.parent_post_mortem_id",
+        back_populates="parent_post_mortem",
+        cascade="all, delete-orphan"
+    )
+
     # Información del incidente
     title = Column(String(255), nullable=False)
     status = Column(SQLEnum(PostMortemStatus), default=PostMortemStatus.DRAFT, nullable=False, index=True)
@@ -157,6 +173,24 @@ class PostMortem(Base):
     def __repr__(self):
         return f"<PostMortem(id={self.id}, title={self.title}, status={self.status})>"
 
+    def get_parent_post_mortem(self) -> Optional['PostMortem']:
+        """Obtener el PM principal (solo puede haber uno)."""
+        if self.parent_relationships:
+            return self.parent_relationships[0].parent_post_mortem
+        return None
+
+    def get_child_post_mortems(self) -> List['PostMortem']:
+        """Obtener todos los PMs secundarios vinculados."""
+        return [rel.child_post_mortem for rel in self.child_relationships]
+
+    def is_primary_incident(self) -> bool:
+        """¿Es un incidente principal? (tiene hijos)"""
+        return len(self.child_relationships) > 0
+
+    def is_secondary_incident(self) -> bool:
+        """¿Es un incidente secundario? (tiene padre)"""
+        return len(self.parent_relationships) > 0
+
     def calculate_mttr(self) -> int:
         """Calculate Mean Time To Recovery in minutes"""
         if self.incident_start and self.resolution_time:
@@ -170,3 +204,27 @@ class PostMortem(Base):
             delta = self.detection_time - self.incident_start
             return int(delta.total_seconds() / 60)
         return 0
+
+
+class PostMortemRelationship(Base):
+    """
+    Enlaces entre post-mortems relacionados (parent-child).
+    Permite vincular múltiples incidentes secundarios a un incidente principal
+    cuando comparten la misma causa raíz.
+    """
+    __tablename__ = 'post_mortem_relationships'
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    parent_post_mortem_id = Column(BigInteger, ForeignKey('post_mortems.id', ondelete='CASCADE'), nullable=False, index=True)
+    child_post_mortem_id = Column(BigInteger, ForeignKey('post_mortems.id', ondelete='CASCADE'), nullable=False, index=True)
+    relationship_type = Column(String(50), default='related_root_cause', nullable=False)
+    description = Column(Text, nullable=True)  # Razón del vínculo
+    linked_by = Column(String(255), nullable=True)  # Usuario que vinculó
+    created_at = Column(DateTime, default=now_argentina, nullable=False)
+
+    # Relationships
+    parent_post_mortem = relationship("PostMortem", foreign_keys=[parent_post_mortem_id], back_populates="child_relationships")
+    child_post_mortem = relationship("PostMortem", foreign_keys=[child_post_mortem_id], back_populates="parent_relationships")
+
+    def __repr__(self):
+        return f'<PostMortemRelationship parent={self.parent_post_mortem_id} child={self.child_post_mortem_id}>'

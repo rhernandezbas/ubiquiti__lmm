@@ -1089,6 +1089,81 @@ async def delete_post_mortem(pm_id: int) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Error deleting post-mortem: {str(e)}")
 
 
+# ============== Post-Mortem Relationship Endpoints ==============
+
+@router.post("/post-mortems/{parent_id}/link/{child_id}")
+async def link_post_mortems(
+    parent_id: int,
+    child_id: int,
+    relationship_type: str = Query('related_root_cause'),
+    description: Optional[str] = Query(None),
+    linked_by: Optional[str] = Query(None)
+) -> Dict[str, Any]:
+    """
+    Vincular un post-mortem secundario a uno principal.
+
+    Casos de uso:
+    - Múltiples sitios caídos por el mismo corte de fibra
+    - Eventos en cascada causados por un problema raíz común
+
+    El PM principal es el incidente más representativo de la causa raíz.
+    Los PMs secundarios quedarán agrupados bajo el principal en la UI.
+    """
+    try:
+        result = pm_service.link_related_incidents(
+            parent_id, child_id, relationship_type, description, linked_by
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/post-mortems/{parent_id}/unlink/{child_id}")
+async def unlink_post_mortems(parent_id: int, child_id: int) -> Dict[str, Any]:
+    """Desvincular un post-mortem secundario de su principal."""
+    try:
+        result = pm_service.unlink_related_incidents(parent_id, child_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/post-mortems/{pm_id}/related")
+async def get_related_post_mortems(pm_id: int) -> Dict[str, Any]:
+    """
+    Obtener post-mortems relacionados.
+
+    Retorna:
+    - parent: PM principal si este es secundario
+    - children: Lista de PMs secundarios si este es principal
+    - is_primary: Boolean indicando si tiene hijos
+    - is_secondary: Boolean indicando si tiene padre
+    """
+    try:
+        return pm_service.get_related_incidents(pm_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/post-mortems/primary")
+async def list_primary_post_mortems(
+    status: Optional[str] = Query(None),
+    limit: int = Query(100, le=500)
+) -> List[Dict[str, Any]]:
+    """
+    Listar solo post-mortems primarios (sin padre).
+
+    Úsalo en lugar de GET /post-mortems para mostrar solo los principales
+    en el NOC Dashboard, ocultando los secundarios que están agrupados.
+
+    Cada PM incluye 'child_count' indicando cuántos secundarios tiene.
+    """
+    try:
+        return pm_service.list_primary_post_mortems(status, limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ============== Polling Control Endpoints ==============
 
 @router.post("/polling/start")
