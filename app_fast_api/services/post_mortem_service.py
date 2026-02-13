@@ -41,16 +41,16 @@ class PostMortemService:
         """
         event = None
 
-        # If alert_event_id is provided, verify event exists and check for duplicates
+        # If alert_event_id is provided, try to get event data and check for duplicates
         if alert_event_id is not None:
+            # Try to get event data if it exists (for populating defaults)
+            # Note: event might be None if it was deleted, that's OK
             event = self.event_repo.get_event_by_id(alert_event_id)
-            if not event:
-                raise ValueError(f"Alert event {alert_event_id} not found")
 
-            # Check if post-mortem already exists for this event
+            # Always check for duplicate post-mortem (even if event doesn't exist anymore)
             existing = self.pm_repo.get_post_mortem_by_event(alert_event_id)
             if existing:
-                raise ValueError(f"Post-mortem already exists for event {alert_event_id}")
+                raise ValueError(f"Ya existe un post-mortem para el evento #{alert_event_id}")
 
         # Prepare data with defaults
         # Use event data if available, otherwise use provided data or defaults
