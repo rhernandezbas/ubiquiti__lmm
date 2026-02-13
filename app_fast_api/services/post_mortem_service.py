@@ -28,41 +28,50 @@ class PostMortemService:
         self.pm_repo = pm_repo
         self.event_repo = event_repo
 
-    def create_post_mortem(self, alert_event_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_post_mortem(self, alert_event_id: Optional[int] = None, data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Create a new post-mortem for an alert event.
+        Create a new post-mortem, optionally linked to an alert event.
 
         Args:
-            alert_event_id: ID of the alert event
+            alert_event_id: ID of the alert event (optional)
             data: Post-mortem data
 
         Returns:
             Created post-mortem data
         """
-        # Verify event exists
-        event = self.event_repo.get_event_by_id(alert_event_id)
-        if not event:
-            raise ValueError(f"Alert event {alert_event_id} not found")
+        event = None
 
-        # Check if post-mortem already exists for this event
-        existing = self.pm_repo.get_post_mortem_by_event(alert_event_id)
-        if existing:
-            raise ValueError(f"Post-mortem already exists for event {alert_event_id}")
+        # If alert_event_id is provided, verify event exists and check for duplicates
+        if alert_event_id is not None:
+            event = self.event_repo.get_event_by_id(alert_event_id)
+            if not event:
+                raise ValueError(f"Alert event {alert_event_id} not found")
 
-        # Prepare data
+            # Check if post-mortem already exists for this event
+            existing = self.pm_repo.get_post_mortem_by_event(alert_event_id)
+            if existing:
+                raise ValueError(f"Post-mortem already exists for event {alert_event_id}")
+
+        # Prepare data with defaults
+        # Use event data if available, otherwise use provided data or defaults
+        default_title = f"Post-Mortem: {event.title}" if event else data.get('title', 'Post-Mortem Sin Título')
+        default_incident_start = event.created_at if event else data.get('incident_start', now_argentina())
+        default_incident_end = event.resolved_at if event else data.get('incident_end')
+        default_severity = event.severity.value if (event and event.severity) else data.get('severity', 'medium')
+
         pm_data = {
             'alert_event_id': alert_event_id,
-            'title': data.get('title', f"Post-Mortem: {event.title}"),
+            'title': data.get('title', default_title),
             'status': PostMortemStatus.DRAFT,
-            'incident_start': data.get('incident_start') or event.created_at,
-            'incident_end': data.get('incident_end') or event.resolved_at,
+            'incident_start': data.get('incident_start') or default_incident_start,
+            'incident_end': data.get('incident_end') or default_incident_end,
             'summary': data.get('summary', ''),
             'root_cause': data.get('root_cause'),
             'trigger': data.get('trigger'),
             'impact_description': data.get('impact_description'),
             'affected_users': data.get('affected_users'),
             'affected_devices': data.get('affected_devices'),
-            'severity': data.get('severity', event.severity.value if event.severity else 'medium'),
+            'severity': data.get('severity', default_severity),
             'customer_impact': data.get('customer_impact'),
             'timeline_events': json.dumps(data.get('timeline_events', [])),
             'response_actions': json.dumps(data.get('response_actions', [])),
@@ -82,10 +91,14 @@ class PostMortemService:
 
         # Set timestamps (not durations)
         # detection_time: When the incident was detected (required field)
-        pm_data['detection_time'] = event.created_at or now_argentina()
-
-        # response_time: When response started (acknowledged timestamp)
-        pm_data['response_time'] = event.acknowledged_at  # Can be None
+        if event:
+            pm_data['detection_time'] = event.created_at or now_argentina()
+            # response_time: When response started (acknowledged timestamp)
+            pm_data['response_time'] = event.acknowledged_at  # Can be None
+        else:
+            # For standalone post-mortems, use provided times or defaults
+            pm_data['detection_time'] = data.get('detection_time', pm_data['incident_start'])
+            pm_data['response_time'] = data.get('response_time')  # Can be None
 
         # resolution_time: When incident was resolved (end timestamp)
         pm_data['resolution_time'] = pm_data['incident_end']  # Can be None
